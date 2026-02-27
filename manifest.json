@@ -1,0 +1,25 @@
+{
+  "name": "Spruce Point Farm Map",
+  "short_name": "Spruce Point",
+  "description": "Interactive tree farm inventory map — browse lot inventory by size and row across 2024 and 2025",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#1a3a2a",
+  "theme_color": "#1a3a2a",
+  "orientation": "any",
+  "scope": "./",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
