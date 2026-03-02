@@ -552,7 +552,12 @@
                 transform: translateY(0);
             }
 
-            .header-totals { display: flex; flex-wrap: wrap; gap: 6px; margin-left: 0; font-size: 0.85em; }
+            .header-totals { display: flex; flex-wrap: wrap; gap: 4px; margin-left: 0; }
+            .header-totals .hs-val { font-size: 0.7rem; }
+            .header-totals .hs-lbl { font-size: 0.48rem; }
+            .header-totals .hs-year-lbl { font-size: 0.48rem; }
+            .header-totals .header-year-stats { gap: 0.6rem; }
+            .header-totals .header-year-divider { height: 1.5rem; }
         }
 
         /* Mobile drag handle / close bar — hidden on desktop */
@@ -793,8 +798,9 @@ KML_FIELDS.forEach(field => {
     });
     L.marker(center, { icon: label, interactive: false }).addTo(map);
 
-    // Hover
+    // Hover (desktop only — skip on touch devices)
     poly.on('mouseover', () => {
+        if ('ontouchstart' in window) return; // suppress on touch devices
         if (poly !== selectedLayer) {
             poly.setStyle({ fillOpacity: 0.65, weight: 3, color: '#a8d4b4' });
         }
@@ -805,6 +811,7 @@ KML_FIELDS.forEach(field => {
     });
 
     poly.on('mouseout', () => {
+        if ('ontouchstart' in window) return;
         if (poly !== selectedLayer) {
             poly.setStyle({ fillOpacity: 0.45, weight: 2, color: colors.stroke });
         }
