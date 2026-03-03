@@ -2405,7 +2405,7 @@ function parseXlsxToData(workbook, filenameOverride) {
     const fname = filenameOverride || LOADED_FILENAME || '';
     let yearKey = '2025';
     const ym = fname.match(/(\d{4})-(\d{4})/);
-    if (ym) yearKey = ym[2];
+    if (ym) yearKey = ym[1]; // Use first year (e.g., 2024 from '2024-2025')
 
     const yearlyData = {};
     const byRowData = {};
@@ -2447,7 +2447,10 @@ function parseXlsxToData(workbook, filenameOverride) {
             inventory[size] += total;
         }
 
-        byRowData[lot].push({ row: rowNum, sizes: rowSizes });
+        // Compute row total
+        var rowTotal = 0;
+        for (var sz in rowSizes) { rowTotal += rowSizes[sz].total; }
+        byRowData[lot].push({ row: rowNum, sizes: rowSizes, total: rowTotal });
     }
 
     YEARLY_DATA[yearKey] = yearlyData;
@@ -2798,7 +2801,7 @@ KML_FIELDS.forEach(field => {
 
 // ── Panel rendering ───────────────────────────────────────────────────────────
 let currentView = 'size'; // 'size' | 'row'
-let currentYear = '2025'; // '2024' | '2025'
+let currentYear = window.CURRENT_INVENTORY_YEAR || '2025';
 let currentLotKey = null;
 let currentFieldName = null;
 let currentData = null;
@@ -2887,8 +2890,9 @@ function renderPanel() {
     const yearSelectorHtml = `
         <div style="display:flex;justify-content:flex-end;padding: 0 1.6rem 0.6rem;">
             <div class="year-selector">
-                <button class="year-btn ${currentYear === '2024' ? 'active' : ''}" onclick="switchYear('2024')">2024</button>
-                <button class="year-btn ${currentYear === '2025' ? 'active' : ''}" onclick="switchYear('2025')">2025</button>
+                ${Object.keys(YEARLY_DATA).sort().map(yr => 
+                    '<button class="year-btn ' + (currentYear === yr ? 'active' : '') + '" onclick="switchYear(\'' + yr + '\')">' + yr + '</button>'
+                ).join('')}
             </div>
         </div>`;
 
