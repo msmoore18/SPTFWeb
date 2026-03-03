@@ -2458,7 +2458,7 @@ async function loadInventoryXlsx() {
             if (resp.ok) {
                 const files = await resp.json();
                 filesFound = files
-                    .filter(f => f.name.match(/Fall.Inventory.Summary.*\.xlsx$/i))
+                    .filter(f => f.name.match(/Fall.Inventory.Summary.*\.(xlsx|csv)$/i))
                     .map(f => ({ name: f.name, url: f.download_url }))
                     .sort((a, b) => {
                         // Sort by the date in the filename (m.dd.yy format)
@@ -2479,9 +2479,15 @@ async function loadInventoryXlsx() {
         console.log('Loading most recent inventory:', newest.name);
         try {
             const resp = await fetch(newest.url);
-            const buf = await resp.arrayBuffer();
-            const wb = XLSX.read(buf, {type: 'array'});
-            parseXlsxToData(wb);
+            if (newest.name.endsWith('.csv')) {
+                const text = await resp.text();
+                const wb = XLSX.read(text, {type: 'string'});
+                parseXlsxToData(wb);
+            } else {
+                const buf = await resp.arrayBuffer();
+                const wb = XLSX.read(buf, {type: 'array'});
+                parseXlsxToData(wb);
+            }
             return true;
         } catch(e) {
             console.error('Failed to load', newest.name, e);
@@ -2490,8 +2496,8 @@ async function loadInventoryXlsx() {
     
     // Fallback: try relative URLs for known filenames
     const fallbackFiles = [
-        '2025-2026 Fall Inventory Summary 7.29.25.xlsx',
-        '2024-2025 Fall Inventory Summary 3.24.25.xlsx'
+        '2025-2026_Fall_Inventory_Summary_7_29_25_by_row.csv',
+        '2024-2025_Fall_Inventory_Summary_3_24_25_by_row.csv'
     ];
     
     for (const fname of fallbackFiles) {
@@ -2499,9 +2505,15 @@ async function loadInventoryXlsx() {
             const resp = await fetch(dirPath + fname);
             if (resp.ok) {
                 LOADED_FILENAME = fname;
-                const buf = await resp.arrayBuffer();
-                const wb = XLSX.read(buf, {type: 'array'});
-                parseXlsxToData(wb);
+                if (fname.endsWith('.csv')) {
+                    const text = await resp.text();
+                    const wb = XLSX.read(text, {type: 'string'});
+                    parseXlsxToData(wb);
+                } else {
+                    const buf = await resp.arrayBuffer();
+                    const wb = XLSX.read(buf, {type: 'array'});
+                    parseXlsxToData(wb);
+                }
                 console.log('Loaded fallback:', fname);
                 return true;
             }
@@ -2513,10 +2525,10 @@ async function loadInventoryXlsx() {
 }
 
 function extractDate(filename) {
-    // Extract date from "...Summary M.DD.YY.xlsx" or "...Summary MM.DD.YY.xlsx"
-    const m = filename.match(/(\d{1,2})\.(\d{1,2})\.(\d{2,4})\.xlsx$/i);
+    // Extract date from "...Summary_M_DD_YY..." or "...Summary M.DD.YY..."
+    var m = filename.match(/(\d{1,2})[_.](\d{1,2})[_.](\d{2,4})/);
     if (m) {
-        let year = parseInt(m[3]);
+        var year = parseInt(m[3]);
         if (year < 100) year += 2000;
         return new Date(year, parseInt(m[1]) - 1, parseInt(m[2]));
     }
