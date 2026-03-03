@@ -2667,10 +2667,12 @@ function parseCoords(coordStr) {
 // ── Draw lots ────────────────────────────────────────────────────────────────
 let selectedLayer = null;
 
+var mapPolygons = []; // Store polygon refs for refreshing after data loads
+
 KML_FIELDS.forEach(field => {
     const lotKey  = kmlNameToLot(field.name);
     const invData = lotKey ? INVENTORY[lotKey] : null;
-    const total   = invData ? invData.grand_total : 0;
+    const total   = invData ? (invData.grand_total || 0) : 0;
     const colors  = densityColor(total);
     const latlngs = parseCoords(field.coords);
 
@@ -2681,6 +2683,11 @@ KML_FIELDS.forEach(field => {
         fillColor:   colors.fill,
         fillOpacity: 0.45,
     }).addTo(map);
+
+    // Store reference for later refresh
+    poly._spLotKey = lotKey;
+    poly._spFieldName = field.name;
+    mapPolygons.push(poly);
 
     // Centroid label
     const bounds = poly.getBounds();
@@ -2720,9 +2727,11 @@ KML_FIELDS.forEach(field => {
         if (poly !== selectedLayer) {
             poly.setStyle({ fillOpacity: 0.65, weight: 3, color: '#a8d4b4' });
         }
+        const hoverData = lotKey ? INVENTORY[lotKey] : null;
+        const hoverTotal = hoverData ? (hoverData.grand_total || 0) : 0;
         poly.bindPopup(`
             <div class="popup-name">${displayName}${lotKey ? '' : ''}</div>
-            ${lotKey ? `<div class="popup-total">🌲 ${total.toLocaleString()} trees · ${lotKey}</div>` : '<div class="popup-total" style="color:#888">No inventory data</div>'}
+            ${lotKey ? `<div class="popup-total">🌲 ${hoverTotal.toLocaleString()} trees · ${lotKey}</div>` : '<div class="popup-total" style="color:#888">No inventory data</div>'}
         `, { closeButton: false, offset: [0, -4] }).openPopup();
     });
 
@@ -2741,11 +2750,16 @@ KML_FIELDS.forEach(field => {
             selectedLayer.setStyle({ fillOpacity: 0.45, weight: 2, color: prev.stroke, fillColor: prev.fill });
         }
 
-        selectedLayer = poly;
-        poly._prevColors = colors;
-        poly.setStyle({ fillOpacity: 0.7, weight: 3.5, color: '#e8d080', fillColor: colors.fill });
+        // Read LIVE data (not stale closure)
+        const liveData = lotKey ? INVENTORY[lotKey] : null;
+        const liveTotal = liveData ? (liveData.grand_total || 0) : 0;
+        const liveColors = densityColor(liveTotal);
 
-        showLotPanel(displayName, lotKey, invData);
+        selectedLayer = poly;
+        poly._prevColors = liveColors;
+        poly.setStyle({ fillOpacity: 0.7, weight: 3.5, color: '#e8d080', fillColor: liveColors.fill });
+
+        showLotPanel(displayName, lotKey, liveData);
     }
 
     poly.on('click', handleLotTap);
@@ -2952,6 +2966,22 @@ function switchView(view) {
 
 function switchYear(year) {
     currentYear = year;
+    // Update INVENTORY to the selected year's data
+    if (YEARLY_DATA[year]) {
+        INVENTORY = YEARLY_DATA[year];
+    }
+    // Re-color polygons for this year
+    if (typeof mapPolygons !== 'undefined') {
+        mapPolygons.forEach(function(poly) {
+            var lotKey = poly._spLotKey;
+            if (!lotKey) return;
+            var lotData = INVENTORY[lotKey];
+            var total = lotData ? (lotData.grand_total || 0) : 0;
+            var c = densityColor(total);
+            poly.setStyle({ fillColor: c.fill, color: c.stroke, fillOpacity: 0.45 });
+            poly._prevColors = c;
+        });
+    }
     renderPanel();
 }
 
@@ -2963,6 +2993,7 @@ function refreshMapData() {
     var years = Object.keys(YEARLY_DATA).sort();
     if (years.length === 0) return;
     
+    // Update header totals
     var headerHtml = years.map(function(yr) {
         var t = computeYearTotals(yr);
         return '<div class="header-year-group"><div class="hs-year-lbl">' + yr + '</div>' +
@@ -2973,19 +3004,16 @@ function refreshMapData() {
     
     document.getElementById('headerTotals').innerHTML = headerHtml;
     
-    // Update map polygons with loaded data
-    if (typeof map !== 'undefined' && typeof KML_FIELDS !== 'undefined') {
-        // Re-render lot colors based on new data
-        map.eachLayer(function(layer) {
-            if (layer._path && layer.options && layer.options.lotKey) {
-                var lotKey = layer.options.lotKey;
-                var yr = window.CURRENT_INVENTORY_YEAR || years[years.length - 1];
-                var lotData = (YEARLY_DATA[yr] || {})[lotKey];
-                if (lotData) {
-                    var c = densityColor(lotData.grand_total || lotData.total || 0);
-                    layer.setStyle({ fillColor: c, fillOpacity: 0.45 });
-                }
-            }
+    // Re-color all map polygons with loaded data
+    if (typeof mapPolygons !== 'undefined') {
+        mapPolygons.forEach(function(poly) {
+            var lotKey = poly._spLotKey;
+            if (!lotKey) return;
+            var lotData = INVENTORY[lotKey];
+            var total = lotData ? (lotData.grand_total || 0) : 0;
+            var c = densityColor(total);
+            poly.setStyle({ fillColor: c.fill, color: c.stroke, fillOpacity: 0.45 });
+            poly._prevColors = c;
         });
     }
 }
