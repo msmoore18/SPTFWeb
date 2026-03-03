@@ -1993,6 +1993,7 @@
 <div id="histPage" class="page">
     <div class="hist-header">
         <div class="subtitle">HISTORICAL SALES · 2023–2025</div>
+        <div id="histDownloadDate" style="font-family:'DM Mono',monospace; font-size:0.55rem; color:rgba(255,255,255,0.35); margin-top:2px;"></div>
     </div>
     <div class="hist-content">
         <div class="hist-chart-box">
@@ -2007,6 +2008,16 @@
             <h3>Annual Revenue</h3>
             <canvas id="histRevenueChart"></canvas>
         </div>
+        
+        <div class="hist-chart-box">
+            <h3>Sales by Customer</h3>
+            <div style="display:flex; align-items:center; gap:0.8rem; margin-bottom:0.8rem;">
+                <label style="font-family:'DM Mono',monospace; font-size:0.7rem; color:#666;">Year:</label>
+                <select id="histPieYear" onchange="updateCustomerPieChart()" style="font-family:'DM Mono',monospace; font-size:0.75rem; padding:0.3rem 0.5rem; border:1px solid #ddd; border-radius:4px; background:white;"></select>
+            </div>
+            <canvas id="histCustomerPieChart"></canvas>
+        </div>
+
         <div id="histSummaryTable"></div>
     </div>
 </div>
@@ -2442,8 +2453,10 @@ function parseXlsxToData(workbook, filenameOverride) {
     YEARLY_DATA[yearKey] = yearlyData;
     BY_ROW_DATA[yearKey] = byRowData;
     
-    // Also populate INVENTORY for the map (uses the most recent year)
-    INVENTORY = yearlyData;
+    // Set INVENTORY to the most recent year only
+    if (!window.CURRENT_INVENTORY_YEAR || yearKey >= window.CURRENT_INVENTORY_YEAR) {
+        INVENTORY = yearlyData;
+    }
 
     // Set initialInventory for Sales Planner (farm-wide totals by height)
     initialInventory = inventory;
@@ -4043,6 +4056,86 @@ function spRenderHistoricalData() {
     
     tbl += '</tbody></table>';
     document.getElementById('histSummaryTable').innerHTML = tbl;
+    initCustomerPieChart();
+}
+
+
+// Customer pie chart
+function initCustomerPieChart() {
+    var select = document.getElementById('histPieYear');
+    if (!select) return;
+    select.innerHTML = '';
+    var years = Object.keys(HISTORICAL_TRANSACTION_DATA).sort();
+    years.forEach(function(y) {
+        var opt = document.createElement('option');
+        opt.value = y;
+        opt.textContent = y;
+        select.appendChild(opt);
+    });
+    if (years.length > 0) select.value = years[years.length - 1]; // Default to most recent
+    updateCustomerPieChart();
+}
+
+function updateCustomerPieChart() {
+    var year = document.getElementById('histPieYear').value;
+    var data = HISTORICAL_TRANSACTION_DATA[year] || [];
+    
+    // Aggregate revenue by customer across all heights/grades
+    var byCustomer = {};
+    data.forEach(function(item) {
+        (item.buyers || []).forEach(function(b) {
+            if (!byCustomer[b.name]) byCustomer[b.name] = 0;
+            byCustomer[b.name] += b.amount;
+        });
+    });
+    
+    // Sort by revenue descending
+    var sorted = Object.entries(byCustomer).sort(function(a, b) { return b[1] - a[1]; });
+    
+    var labels = sorted.map(function(e) { return e[0] || 'Unknown'; });
+    var values = sorted.map(function(e) { return Math.round(e[1] * 100) / 100; });
+    
+    // Generate colors
+    var palette = ['#2d5a3d','#5a8a6a','#d4891a','#6b4c35','#9e3a2f','#2980b9','#8e44ad','#16a085','#c0392b','#f39c12','#27ae60','#e67e22','#34495e','#1abc9c','#e74c3c','#3498db','#9b59b6','#2ecc71','#e91e63','#ff9800'];
+    var bgColors = labels.map(function(_, i) { return palette[i % palette.length]; });
+    
+    var ctx = document.getElementById('histCustomerPieChart');
+    if (spCharts.customerPie) spCharts.customerPie.destroy();
+    
+    spCharts.customerPie = new Chart(ctx, {
+        type: 'pie',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: values,
+                backgroundColor: bgColors,
+                borderWidth: 1,
+                borderColor: '#fff'
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'right',
+                    labels: {
+                        font: { size: 11, family: "'DM Sans', sans-serif" },
+                        boxWidth: 12,
+                        padding: 8
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(ctx) {
+                            var total = ctx.dataset.data.reduce(function(a,b) { return a+b; }, 0);
+                            var pct = ((ctx.parsed / total) * 100).toFixed(1);
+                            return ctx.label + ': $' + ctx.parsed.toLocaleString(undefined, {minimumFractionDigits:0, maximumFractionDigits:0}) + ' (' + pct + '%)';
+                        }
+                    }
+                }
+            }
+        }
+    });
 }
 
 // Gap analysis
