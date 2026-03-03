@@ -2362,11 +2362,15 @@ const XLSX_GRADES = ['A','B','Cut'];
 function parseXlsxToData(workbook, filenameOverride) {
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(sheet, {defval: 0});
-    if (!rows.length) return;
+    if (!rows.length) { console.warn('CSV has no rows'); return; }
 
     const colNames = Object.keys(rows[0]);
+    console.log('CSV columns:', JSON.stringify(colNames));
+    console.log('First data row:', JSON.stringify(rows[0]));
+    
     const lotCol = colNames.find(c => c.toLowerCase() === 'lot') || colNames[0];
     const rowCol = colNames.find(c => c.toLowerCase() === 'row') || colNames[1];
+    console.log('Using lot column:', lotCol, '| row column:', rowCol);
 
     // Build size/grade column mapping
     const sizeGradeCols = {};
@@ -2380,6 +2384,12 @@ function parseXlsxToData(workbook, filenameOverride) {
             sizeGradeCols[size][grade] = col;
         }
     }
+    console.log('Size/grade column mapping:', JSON.stringify(Object.keys(sizeGradeCols)));
+    if (Object.keys(sizeGradeCols).length === 0) {
+        console.error('NO SIZE COLUMNS FOUND! Columns must match pattern like 12"_A or 3\'_Cut');
+        console.error('Got columns:', colNames);
+        return;
+    }
 
     // Extract year from filename
     const fname = filenameOverride || LOADED_FILENAME || '';
@@ -2392,7 +2402,8 @@ function parseXlsxToData(workbook, filenameOverride) {
     const inventory = {};
 
     for (const row of rows) {
-        const lot = 'Lot ' + String(row[lotCol]);
+        const rawLot = String(row[lotCol]).trim();
+        const lot = rawLot.match(/^Lot\s/i) ? rawLot : 'Lot ' + rawLot;
         const rowNum = parseInt(row[rowCol]) || 0;
 
         if (!yearlyData[lot]) {
@@ -2443,6 +2454,9 @@ function parseXlsxToData(workbook, filenameOverride) {
     }
     
     DATA_LOADED = true;
+    console.log('INVENTORY keys:', Object.keys(INVENTORY));
+    console.log('YEARLY_DATA keys:', Object.keys(YEARLY_DATA));
+    console.log('Sample lot:', INVENTORY[Object.keys(INVENTORY)[0]]);
     console.log('Loaded CSV data for year', yearKey, '- lots:', Object.keys(yearlyData).length, 'total trees:', Object.values(inventory).reduce((s,v)=>s+v,0));
 }
 
