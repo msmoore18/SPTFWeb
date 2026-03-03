@@ -1733,7 +1733,6 @@
     <!-- Header -->
     <div class="header">
         <div class="header-text">
-            <h1>Spruce Point</h1>
             <div class="subtitle">FALL INVENTORY · CLICK A LOT TO EXPLORE</div>
         </div>
         <div class="header-totals" id="headerTotals">
@@ -3034,6 +3033,7 @@ function refreshMapData() {
 
 async function initAfterDataLoad() {
     const loaded = await loadInventoryXlsx();
+    await loadTransactionXlsx();
     if (!loaded) {
         // Use hardcoded fallback data for map/dig planner
         console.warn('Using hardcoded data');
@@ -3277,73 +3277,183 @@ buildChips();
 // ══════════════════════════════════════════
 
         var initialInventory = {}; // Loaded from XLSX
-const historicalSales = {
-            2023: {
-                "6'": { qty: 71, price: 188.33, revenue: 13185 },
-                "7'": { qty: 34, price: 220.00, revenue: 7480 },
-                "8'": { qty: 3, price: 260.00, revenue: 780 },
-                "14'": { qty: 20, price: 682.25, revenue: 15327 },
-                "15'": { qty: 73, price: 618.94, revenue: 62405 },
-                "16'": { qty: 133, price: 756.31, revenue: 128345 },
-                "17'": { qty: 185, price: 882.22, revenue: 219702 },
-                "18'": { qty: 195, price: 957.89, revenue: 230400 },
-                "19'": { qty: 69, price: 1037.26, revenue: 104616 },
-                "20'": { qty: 35, price: 1239.20, revenue: 93520 },
-                "21'": { qty: 26, price: 1341.67, revenue: 33970 },
-                "22'": { qty: 13, price: 1408.00, revenue: 18580 },
-                "23'": { qty: 10, price: 1319.25, revenue: 13518 },
-                "24'": { qty: 40, price: 1100.00, revenue: 44000 },
-                "25'": { qty: 25, price: 1233.33, revenue: 33500 }
-            },
-            2024: {
-                "6'": { qty: 11, price: 213.88, revenue: 2293 },
-                "7'": { qty: 40, price: 248.14, revenue: 9761 },
-                "8'": { qty: 96, price: 295.20, revenue: 28023 },
-                "9'": { qty: 88, price: 361.32, revenue: 31590 },
-                "10'": { qty: 67, price: 435.22, revenue: 28583 },
-                "11'": { qty: 51, price: 619.75, revenue: 36352 },
-                "12'": { qty: 20, price: 590.00, revenue: 11800 },
-                "13'": { qty: 17, price: 623.63, revenue: 10580 },
-                "14'": { qty: 14, price: 716.88, revenue: 10010 },
-                "15'": { qty: 36, price: 678.86, revenue: 27827 },
-                "16'": { qty: 48, price: 895.00, revenue: 42310 },
-                "17'": { qty: 69, price: 986.92, revenue: 69141 },
-                "18'": { qty: 38, price: 901.25, revenue: 38940 },
-                "19'": { qty: 24, price: 1327.50, revenue: 30960 },
-                "20'": { qty: 82, price: 1553.33, revenue: 115415 },
-                "21'": { qty: 12, price: 1490.00, revenue: 16970 },
-                "22'": { qty: 26, price: 1564.00, revenue: 38505 },
-                "23'": { qty: 157, price: 1711.38, revenue: 268550 },
-                "24'": { qty: 3, price: 1250.00, revenue: 4400 },
-                "25'": { qty: 23, price: 1855.00, revenue: 45220 },
-                "26'": { qty: 17, price: 600.00, revenue: 10200 }
-            },
-            2025: {
-                "6'": { qty: 24, price: 207.50, revenue: 4980 },
-                "7'": { qty: 29, price: 252.17, revenue: 7313 },
-                "8'": { qty: 102, price: 299.90, revenue: 30590 },
-                "9'": { qty: 143, price: 375.08, revenue: 53637 },
-                "10'": { qty: 160, price: 456.68, revenue: 73068 },
-                "11'": { qty: 120, price: 526.25, revenue: 63150 },
-                "12'": { qty: 45, price: 594.71, revenue: 26762 },
-                "13'": { qty: 38, price: 677.47, revenue: 25744 },
-                "14'": { qty: 17, price: 745.21, revenue: 12669 },
-                "15'": { qty: 8, price: 824.81, revenue: 6599 },
-                "16'": { qty: 13, price: 979.62, revenue: 12735 },
-                "17'": { qty: 6, price: 1160.42, revenue: 6963 },
-                "18'": { qty: 4, price: 1259.38, revenue: 5038 },
-                "19'": { qty: 8, price: 1434.38, revenue: 11475 },
-                "20'": { qty: 216, price: 1541.57, revenue: 332980 },
-                "21'": { qty: 7, price: 1942.86, revenue: 13600 },
-                "22'": { qty: 6, price: 1855.83, revenue: 11135 },
-                "23'": { qty: 11, price: 1777.27, revenue: 19550 },
-                "24'": { qty: 7, price: 1700.00, revenue: 11900 },
-                "25'": { qty: 107, price: 1156.07, revenue: 123700 },
-                "26'": { qty: 20, price: 765.00, revenue: 15300 }
+
+// ══ HISTORICAL TRANSACTION DATA ══
+// Loaded from SPTF_LLC_Transaction_Report.xlsx
+var TRANSACTION_DOWNLOAD_DATE = "Cash Basis Tuesday, March 03, 2026 09:57 PM GMTZ";
+var HISTORICAL_TRANSACTION_DATA = {"2023": [{"height": "6'", "grade": "A", "qty": 71, "revenue": 13185.0, "avg_price": 185.7, "buyers": [{"name": "Alameda Wholesale Nursery", "qty": 66, "amount": 12210.0}, {"name": "Blizzard Landscape", "qty": 5, "amount": 975.0}]}, {"height": "7'", "grade": "A", "qty": 34, "revenue": 7480.0, "avg_price": 220.0, "buyers": [{"name": "Alameda Wholesale Nursery", "qty": 34, "amount": 7480.0}]}, {"height": "8'", "grade": "A", "qty": 3, "revenue": 780.0, "avg_price": 260.0, "buyers": [{"name": "Alameda Wholesale Nursery", "qty": 3, "amount": 780.0}]}, {"height": "13'", "grade": "A", "qty": 39, "revenue": 14080.0, "avg_price": 361.03, "buyers": [{"name": "Alameda Wholesale Nursery", "qty": 38, "amount": 13680.0}, {"name": "Boulder's Best Bid", "qty": 1, "amount": 400.0}]}, {"height": "14'", "grade": "A", "qty": 65, "revenue": 34452.0, "avg_price": 530.03, "buyers": [{"name": "Alameda Wholesale Nursery", "qty": 45, "amount": 19125.0}, {"name": "Boulder's Best Bid", "qty": 6, "amount": 2832.0}, {"name": "Field Direct Trees LLC", "qty": 14, "amount": 12495.0}]}, {"height": "15'", "grade": "A", "qty": 97, "revenue": 58145.0, "avg_price": 599.43, "buyers": [{"name": "Alameda Wholesale Nursery", "qty": 61, "amount": 35390.0}, {"name": "Blizzard Landscape", "qty": 1, "amount": 715.0}, {"name": "Boulder's Best Bid", "qty": 6, "amount": 3432.0}, {"name": "Field Direct Trees LLC", "qty": 9, "amount": 5708.0}, {"name": "Mountain View Tree Farm", "qty": 20, "amount": 12900.0}]}, {"height": "16'", "grade": "A", "qty": 189, "revenue": 130913.75, "avg_price": 692.67, "buyers": [{"name": "Alameda Wholesale Nursery", "qty": 67, "amount": 46650.0}, {"name": "Blizzard Landscape", "qty": 1, "amount": 835.0}, {"name": "Field Direct Trees LLC", "qty": 69, "amount": 42588.75}, {"name": "Landscape Workshop", "qty": 13, "amount": 10400.0}, {"name": "Mountain View Tree Farm", "qty": 35, "amount": 27100.0}, {"name": "West Canyon Nurseries, Inc.", "qty": 4, "amount": 3340.0}]}, {"height": "17'", "grade": "A", "qty": 286, "revenue": 222462.25, "avg_price": 777.84, "buyers": [{"name": "Alameda Wholesale Nursery", "qty": 69, "amount": 55260.0}, {"name": "Angelo Distefano", "qty": 48, "amount": 31200.0}, {"name": "Blizzard Landscape", "qty": 4, "amount": 3900.0}, {"name": "Boulder's Best Bid", "qty": 3, "amount": 2340.0}, {"name": "Field Direct Trees LLC", "qty": 97, "amount": 70202.25}, {"name": "Landscape Workshop", "qty": 27, "amount": 24975.0}, {"name": "Mountain View Tree Farm", "qty": 34, "amount": 30685.0}, {"name": "West Canyon Nurseries, Inc.", "qty": 4, "amount": 3900.0}]}, {"height": "18'", "grade": "A", "qty": 285, "revenue": 216135.0, "avg_price": 758.37, "buyers": [{"name": "Alameda Wholesale Nursery", "qty": 73, "amount": 63885.0}, {"name": "Blizzard Landscape", "qty": 3, "amount": 3150.0}, {"name": "Boulder's Best Bid", "qty": 2, "amount": 1680.0}, {"name": "Colorado Urban Forestry", "qty": 56, "amount": 29400.0}, {"name": "Eli Stephens Landscaping", "qty": 12, "amount": 6300.0}, {"name": "Field Direct Trees LLC", "qty": 88, "amount": 61400.0}, {"name": "Landscape Workshop", "qty": 31, "amount": 31000.0}, {"name": "Mountain View Tree Farm", "qty": 16, "amount": 15120.0}, {"name": "West Canyon Nurseries, Inc.", "qty": 4, "amount": 4200.0}]}, {"height": "19'", "grade": "A", "qty": 108, "revenue": 102260.5, "avg_price": 946.86, "buyers": [{"name": "Alameda Wholesale Nursery", "qty": 53, "amount": 49395.0}, {"name": "Boulder's Best Bid", "qty": 2, "amount": 1840.0}, {"name": "Field Direct Trees LLC", "qty": 20, "amount": 15550.5}, {"name": "Landscape Workshop", "qty": 15, "amount": 16500.0}, {"name": "Mountain View Tree Farm", "qty": 15, "amount": 15525.0}, {"name": "West Canyon Nurseries, Inc.", "qty": 3, "amount": 3450.0}]}, {"height": "20'", "grade": "A", "qty": 117, "revenue": 124240.0, "avg_price": 1061.88, "buyers": [{"name": "Alameda Wholesale Nursery", "qty": 76, "amount": 78720.0}, {"name": "Blizzard Landscape", "qty": 3, "amount": 4125.0}, {"name": "Field Direct Trees LLC", "qty": 7, "amount": 4770.0}, {"name": "Grand County", "qty": 6, "amount": 4125.0}, {"name": "Landscape Workshop", "qty": 25, "amount": 32500.0}]}, {"height": "20-22'", "grade": "A", "qty": 16, "revenue": 20160.0, "avg_price": 1260.0, "buyers": [{"name": "Field Direct Trees LLC", "qty": 16, "amount": 20160.0}]}, {"height": "21'", "grade": "A", "qty": 12, "revenue": 13810.0, "avg_price": 1150.83, "buyers": [{"name": "Blizzard Landscape", "qty": 3, "amount": 4500.0}, {"name": "Field Direct Trees LLC", "qty": 5, "amount": 6310.0}, {"name": "Grand County", "qty": 4, "amount": 3000.0}]}, {"height": "22'", "grade": "A", "qty": 16, "revenue": 18580.0, "avg_price": 1161.25, "buyers": [{"name": "Blizzard Landscape", "qty": 3, "amount": 4875.0}, {"name": "Field Direct Trees LLC", "qty": 7, "amount": 8830.0}, {"name": "Grand County", "qty": 6, "amount": 4875.0}]}, {"height": "23-25'", "grade": "A", "qty": 25, "revenue": 22430.0, "avg_price": 897.2, "buyers": [{"name": "Three Forks Ranch", "qty": 25, "amount": 22430.0}]}, {"height": "23'", "grade": "A", "qty": 10, "revenue": 13518.0, "avg_price": 1351.8, "buyers": [{"name": "Field Direct Trees LLC", "qty": 10, "amount": 13518.0}]}, {"height": "25'", "grade": "A", "qty": 25, "revenue": 33500.0, "avg_price": 1340.0, "buyers": [{"name": "Southwind Construction", "qty": 15, "amount": 22500.0}, {"name": "Three Forks Ranch", "qty": 10, "amount": 11000.0}]}, {"height": "12'", "grade": "B", "qty": 1, "revenue": 310.25, "avg_price": 310.25, "buyers": [{"name": "Field Direct Trees LLC", "qty": 1, "amount": 310.25}]}, {"height": "13'", "grade": "B", "qty": 3, "revenue": 1020.0, "avg_price": 340.0, "buyers": [{"name": "Field Direct Trees LLC", "qty": 3, "amount": 1020.0}]}, {"height": "14'", "grade": "B", "qty": 25, "revenue": 11728.25, "avg_price": 469.13, "buyers": [{"name": "Colorado Urban Forestry", "qty": 8, "amount": 4240.0}, {"name": "Field Direct Trees LLC", "qty": 17, "amount": 7488.25}]}, {"height": "15'", "grade": "B", "qty": 30, "revenue": 17268.5, "avg_price": 575.62, "buyers": [{"name": "Colorado Urban Forestry", "qty": 8, "amount": 5160.0}, {"name": "Field Direct Trees LLC", "qty": 21, "amount": 11463.5}, {"name": "Neighbor Sale", "qty": 1, "amount": 645.0}]}, {"height": "16'", "grade": "B", "qty": 56, "revenue": 36984.5, "avg_price": 660.44, "buyers": [{"name": "Colorado Urban Forestry", "qty": 8, "amount": 6000.0}, {"name": "Field Direct Trees LLC", "qty": 46, "amount": 29484.5}, {"name": "Neighbor Sale", "qty": 2, "amount": 1500.0}]}, {"height": "17'", "grade": "B", "qty": 33, "revenue": 24795.0, "avg_price": 751.36, "buyers": [{"name": "Field Direct Trees LLC", "qty": 33, "amount": 24795.0}]}, {"height": "18'", "grade": "B", "qty": 18, "revenue": 13401.0, "avg_price": 744.5, "buyers": [{"name": "Field Direct Trees LLC", "qty": 18, "amount": 13401.0}]}, {"height": "Misc", "grade": "Misc", "qty": 99, "revenue": 40213.2, "avg_price": 406.19, "buyers": [{"name": "Eli Stephens Landscaping", "qty": 2, "amount": 245.7}, {"name": "Front Range Landscape & Nursery", "qty": 66, "amount": 34090.0}, {"name": "Grand County", "qty": 2, "amount": 468.0}, {"name": "Robert Carter", "qty": 24, "amount": 10909.5}, {"name": "Three Forks Ranch", "qty": 5, "amount": -5500.0}]}], "2024": [{"height": "6'", "grade": "A", "qty": 13, "revenue": 2293.0, "avg_price": 176.38, "buyers": [{"name": "Alameda Wholesale Nursery", "qty": 1, "amount": 200.0}, {"name": "Blizzard Landscape", "qty": 2, "amount": 460.0}, {"name": "Field Direct Trees LLC", "qty": 6, "amount": 1173.0}, {"name": "Joel Clapick", "qty": 4, "amount": 460.0}]}, {"height": "7'", "grade": "A", "qty": 42, "revenue": 9760.5, "avg_price": 232.39, "buyers": [{"name": "Alameda Wholesale Nursery", "qty": 27, "amount": 6615.0}, {"name": "Blizzard Landscape", "qty": 2, "amount": 540.0}, {"name": "Field Direct Trees LLC", "qty": 9, "amount": 2065.5}, {"name": "Joel Clapick", "qty": 4, "amount": 540.0}]}, {"height": "8'", "grade": "A", "qty": 96, "revenue": 28023.0, "avg_price": 291.91, "buyers": [{"name": "Alameda Wholesale Nursery", "qty": 81, "amount": 23895.0}, {"name": "Blizzard Landscape", "qty": 1, "amount": 320.0}, {"name": "Field Direct Trees LLC", "qty": 14, "amount": 3808.0}]}, {"height": "9'", "grade": "A", "qty": 90, "revenue": 31589.5, "avg_price": 350.99, "buyers": [{"name": "Alameda Wholesale Nursery", "qty": 72, "amount": 26280.0}, {"name": "Blizzard Landscape", "qty": 3, "amount": 1110.0}, {"name": "Field Direct Trees LLC", "qty": 11, "amount": 3459.5}, {"name": "Joel Clapick", "qty": 4, "amount": 740.0}]}, {"height": "10'", "grade": "A", "qty": 67, "revenue": 28583.0, "avg_price": 426.61, "buyers": [{"name": "Alameda Wholesale Nursery", "qty": 53, "amount": 23585.0}, {"name": "Field Direct Trees LLC", "qty": 14, "amount": 4998.0}]}, {"height": "11'", "grade": "A", "qty": 54, "revenue": 36352.25, "avg_price": 673.19, "buyers": [{"name": "Alameda Wholesale Nursery", "qty": 39, "amount": 20085.0}, {"name": "Field Direct Trees LLC", "qty": 1, "amount": 412.25}, {"name": "Joel Clapick", "qty": 6, "amount": 1455.0}, {"name": "Landscape Workshop", "qty": 8, "amount": 14400.0}]}, {"height": "12'", "grade": "A", "qty": 20, "revenue": 11800.0, "avg_price": 590.0, "buyers": [{"name": "Alameda Wholesale Nursery", "qty": 20, "amount": 11800.0}]}, {"height": "13'", "grade": "A", "qty": 17, "revenue": 10580.0, "avg_price": 622.35, "buyers": [{"name": "Alameda Wholesale Nursery", "qty": 11, "amount": 7315.0}, {"name": "Blizzard Landscape", "qty": 1, "amount": 625.0}, {"name": "Field Direct Trees LLC", "qty": 2, "amount": 954.0}, {"name": "Mountain View Tree Farm", "qty": 3, "amount": 1686.0}]}, {"height": "14'", "grade": "A", "qty": 17, "revenue": 10010.0, "avg_price": 588.82, "buyers": [{"name": "Alameda Wholesale Nursery", "qty": 6, "amount": 4440.0}, {"name": "Field Direct Trees LLC", "qty": 2, "amount": 1070.0}, {"name": "Mountain View Tree Farm", "qty": 3, "amount": 1890.0}, {"name": "Southwind Construction", "qty": 6, "amount": 2610.0}]}, {"height": "15'", "grade": "A", "qty": 61, "revenue": 38196.5, "avg_price": 626.17, "buyers": [{"name": "Alameda Wholesale Nursery", "qty": 17, "amount": 10370.0}, {"name": "Field Direct Trees LLC", "qty": 13, "amount": 9391.5}, {"name": "Joel Clapick", "qty": 4, "amount": 1700.0}, {"name": "Mountain View Tree Farm", "qty": 13, "amount": 9945.0}, {"name": "Southwind Construction", "qty": 14, "amount": 6790.0}]}, {"height": "16'", "grade": "A", "qty": 65, "revenue": 55060.0, "avg_price": 847.08, "buyers": [{"name": "Alameda Wholesale Nursery", "qty": 19, "amount": 14710.0}, {"name": "Field Direct Trees LLC", "qty": 21, "amount": 17850.0}, {"name": "Landscape Workshop", "qty": 12, "amount": 10800.0}, {"name": "Mountain View Tree Farm", "qty": 13, "amount": 11700.0}]}, {"height": "17'", "grade": "A", "qty": 89, "revenue": 88391.0, "avg_price": 993.16, "buyers": [{"name": "Alameda Wholesale Nursery", "qty": 31, "amount": 29510.0}, {"name": "Field Direct Trees LLC", "qty": 20, "amount": 19551.0}, {"name": "Landscape Workshop", "qty": 25, "amount": 25875.0}, {"name": "Mountain View Tree Farm", "qty": 13, "amount": 13455.0}]}, {"height": "18'", "grade": "A", "qty": 41, "revenue": 45555.0, "avg_price": 1111.1, "buyers": [{"name": "Alameda Wholesale Nursery", "qty": 13, "amount": 14055.0}, {"name": "Landscape Workshop", "qty": 25, "amount": 28125.0}, {"name": "Mountain View Tree Farm", "qty": 3, "amount": 3375.0}]}, {"height": "19'", "grade": "A", "qty": 37, "revenue": 44415.0, "avg_price": 1200.41, "buyers": [{"name": "Alameda Wholesale Nursery", "qty": 21, "amount": 24255.0}, {"name": "Landscape Workshop", "qty": 13, "amount": 16380.0}, {"name": "Mountain View Tree Farm", "qty": 3, "amount": 3780.0}]}, {"height": "20'", "grade": "A", "qty": 95, "revenue": 129815.0, "avg_price": 1366.47, "buyers": [{"name": "Alameda Wholesale Nursery", "qty": 21, "amount": 30600.0}, {"name": "Blizzard Landscape", "qty": 4, "amount": 6000.0}, {"name": "Field Direct Trees LLC", "qty": 17, "amount": 22865.0}, {"name": "Joel Clapick", "qty": 2, "amount": 1500.0}, {"name": "Landscape Workshop", "qty": 30, "amount": 40500.0}, {"name": "Mountain View Tree Farm", "qty": 21, "amount": 28350.0}]}, {"height": "21'", "grade": "A", "qty": 13, "revenue": 16970.0, "avg_price": 1305.38, "buyers": [{"name": "Blizzard Landscape", "qty": 1, "amount": 1600.0}, {"name": "Field Direct Trees LLC", "qty": 10, "amount": 13770.0}, {"name": "Joel Clapick", "qty": 2, "amount": 1600.0}]}, {"height": "22'", "grade": "A", "qty": 28, "revenue": 38505.0, "avg_price": 1375.18, "buyers": [{"name": "Blizzard Landscape", "qty": 1, "amount": 1700.0}, {"name": "Field Direct Trees LLC", "qty": 23, "amount": 33405.0}, {"name": "Joel Clapick", "qty": 4, "amount": 3400.0}]}, {"height": "23-25'", "grade": "A", "qty": 25, "revenue": 21570.0, "avg_price": 862.8, "buyers": [{"name": "Three Forks Ranch", "qty": 25, "amount": 21570.0}]}, {"height": "23'", "grade": "A", "qty": 154, "revenue": 268550.0, "avg_price": 1743.83, "buyers": [{"name": "Aspen SavATree", "qty": 2, "amount": 4000.0}, {"name": "Field Direct Trees LLC", "qty": 41, "amount": 69700.0}, {"name": "Joel Clapick", "qty": 4, "amount": 3600.0}, {"name": "Landscape Workshop", "qty": 102, "amount": 183600.0}, {"name": "Slater", "qty": 5, "amount": 7650.0}]}, {"height": "24'", "grade": "A", "qty": 5, "revenue": 4400.0, "avg_price": 880.0, "buyers": [{"name": "Joel Clapick", "qty": 4, "amount": 3800.0}, {"name": "Neighbor Sale", "qty": 1, "amount": 600.0}]}, {"height": "25'", "grade": "A", "qty": 23, "revenue": 45220.0, "avg_price": 1966.09, "buyers": [{"name": "Aspen SavATree", "qty": 2, "amount": 3600.0}, {"name": "Field Direct Trees LLC", "qty": 1, "amount": 1620.0}, {"name": "Southwind Construction", "qty": 20, "amount": 40000.0}]}, {"height": "26'", "grade": "A", "qty": 17, "revenue": 10200.0, "avg_price": 600.0, "buyers": [{"name": "Aspen SavATree", "qty": 17, "amount": 10200.0}]}, {"height": "12'", "grade": "B", "qty": 2, "revenue": 1000.0, "avg_price": 500.0, "buyers": [{"name": "Never Summer Landscape", "qty": 2, "amount": 1000.0}]}, {"height": "13'", "grade": "B", "qty": 1, "revenue": 562.0, "avg_price": 562.0, "buyers": [{"name": "Never Summer Landscape", "qty": 1, "amount": 562.0}]}, {"height": "14'", "grade": "B", "qty": 1, "revenue": 595.0, "avg_price": 595.0, "buyers": [{"name": "Blizzard Landscape", "qty": 1, "amount": 595.0}]}, {"height": "Misc", "grade": "Misc", "qty": 10, "revenue": -9233.4, "avg_price": -923.34, "buyers": [{"name": "", "qty": 0, "amount": -2218.37}, {"name": "Blizzard Landscape", "qty": 2, "amount": 597.45}, {"name": "Field Direct Trees LLC", "qty": 1, "amount": -850.0}, {"name": "Never Summer Landscape", "qty": 1, "amount": 60.92}, {"name": "Slater", "qty": 1, "amount": -7650.0}, {"name": "Southwind Construction", "qty": 4, "amount": 1926.6}, {"name": "Three Forks Ranch", "qty": 1, "amount": -1100.0}]}], "2025": [{"height": "6'", "grade": "A", "qty": 24, "revenue": 4980.0, "avg_price": 207.5, "buyers": [{"name": "Alameda Wholesale Nursery", "qty": 9, "amount": 1800.0}, {"name": "Mountain View Tree Farm", "qty": 15, "amount": 3180.0}]}, {"height": "7'", "grade": "A", "qty": 29, "revenue": 7313.0, "avg_price": 252.17, "buyers": [{"name": "Alameda Wholesale Nursery", "qty": 16, "amount": 3920.0}, {"name": "Mountain View Tree Farm", "qty": 13, "amount": 3393.0}]}, {"height": "8'", "grade": "A", "qty": 102, "revenue": 30590.0, "avg_price": 299.9, "buyers": [{"name": "Alameda Wholesale Nursery", "qty": 77, "amount": 22715.0}, {"name": "Mountain View Tree Farm", "qty": 25, "amount": 7875.0}]}, {"height": "9'", "grade": "A", "qty": 143, "revenue": 53637.0, "avg_price": 375.08, "buyers": [{"name": "Alameda Wholesale Nursery", "qty": 84, "amount": 30660.0}, {"name": "Mountain View Tree Farm", "qty": 59, "amount": 22977.0}]}, {"height": "10'", "grade": "A", "qty": 160, "revenue": 73068.0, "avg_price": 456.68, "buyers": [{"name": "Alameda Wholesale Nursery", "qty": 97, "amount": 43165.0}, {"name": "Mountain View Tree Farm", "qty": 63, "amount": 29903.0}]}, {"height": "11'", "grade": "A", "qty": 120, "revenue": 63150.0, "avg_price": 526.25, "buyers": [{"name": "Alameda Wholesale Nursery", "qty": 75, "amount": 38625.0}, {"name": "Mountain View Tree Farm", "qty": 45, "amount": 24525.0}]}, {"height": "12'", "grade": "A", "qty": 45, "revenue": 26762.0, "avg_price": 594.71, "buyers": [{"name": "Alameda Wholesale Nursery", "qty": 39, "amount": 23010.0}, {"name": "Mountain View Tree Farm", "qty": 6, "amount": 3752.0}]}, {"height": "13'", "grade": "A", "qty": 38, "revenue": 25744.0, "avg_price": 677.47, "buyers": [{"name": "Alameda Wholesale Nursery", "qty": 27, "amount": 17955.0}, {"name": "Mountain View Tree Farm", "qty": 11, "amount": 7789.0}]}, {"height": "14'", "grade": "A", "qty": 17, "revenue": 12668.5, "avg_price": 745.21, "buyers": [{"name": "Alameda Wholesale Nursery", "qty": 12, "amount": 8880.0}, {"name": "Field Direct Trees LLC", "qty": 3, "amount": 2218.5}, {"name": "Mountain View Tree Farm", "qty": 2, "amount": 1570.0}]}, {"height": "15'", "grade": "A", "qty": 8, "revenue": 6598.5, "avg_price": 824.81, "buyers": [{"name": "Alameda Wholesale Nursery", "qty": 5, "amount": 4125.0}, {"name": "Field Direct Trees LLC", "qty": 3, "amount": 2473.5}]}, {"height": "16'", "grade": "A", "qty": 13, "revenue": 12735.0, "avg_price": 979.62, "buyers": [{"name": "Alameda Wholesale Nursery", "qty": 9, "amount": 8820.0}, {"name": "Field Direct Trees LLC", "qty": 4, "amount": 3915.0}]}, {"height": "17'", "grade": "A", "qty": 6, "revenue": 6962.5, "avg_price": 1160.42, "buyers": [{"name": "Alameda Wholesale Nursery", "qty": 1, "amount": 1140.0}, {"name": "Field Direct Trees LLC", "qty": 5, "amount": 5822.5}]}, {"height": "18'", "grade": "A", "qty": 4, "revenue": 5037.5, "avg_price": 1259.38, "buyers": [{"name": "Alameda Wholesale Nursery", "qty": 3, "amount": 3720.0}, {"name": "Field Direct Trees LLC", "qty": 1, "amount": 1317.5}]}, {"height": "19'", "grade": "A", "qty": 8, "revenue": 11475.0, "avg_price": 1434.38, "buyers": [{"name": "Alameda Wholesale Nursery", "qty": 5, "amount": 6750.0}, {"name": "Field Direct Trees LLC", "qty": 2, "amount": 2975.0}, {"name": "Mountain View Tree Farm", "qty": 1, "amount": 1750.0}]}, {"height": "20'", "grade": "A", "qty": 218, "revenue": 334980.0, "avg_price": 1536.61, "buyers": [{"name": "Alameda Wholesale Nursery", "qty": 25, "amount": 45000.0}, {"name": "Ceres Landcare (Weston Landscape)", "qty": 40, "amount": 44000.0}, {"name": "Field Direct Trees LLC", "qty": 4, "amount": 7480.0}, {"name": "Joel Clapick", "qty": 8, "amount": 17600.0}, {"name": "Landscape Workshop", "qty": 30, "amount": 57400.0}, {"name": "Lipkin Warner Construction", "qty": 12, "amount": 15000.0}, {"name": "Mountain Gardens", "qty": 44, "amount": 27500.0}, {"name": "Mountain View Tree Farm", "qty": 55, "amount": 121000.0}]}, {"height": "21'", "grade": "A", "qty": 7, "revenue": 13600.0, "avg_price": 1942.86, "buyers": [{"name": "Field Direct Trees LLC", "qty": 7, "amount": 13600.0}]}, {"height": "22'", "grade": "A", "qty": 6, "revenue": 11135.0, "avg_price": 1855.83, "buyers": [{"name": "Field Direct Trees LLC", "qty": 6, "amount": 11135.0}]}, {"height": "23'", "grade": "A", "qty": 11, "revenue": 19550.0, "avg_price": 1777.27, "buyers": [{"name": "Field Direct Trees LLC", "qty": 11, "amount": 19550.0}]}, {"height": "24'", "grade": "A", "qty": 7, "revenue": 11900.0, "avg_price": 1700.0, "buyers": [{"name": "Field Direct Trees LLC", "qty": 7, "amount": 11900.0}]}, {"height": "25'", "grade": "A", "qty": 108, "revenue": 124600.0, "avg_price": 1153.7, "buyers": [{"name": "Clarke & Co", "qty": 4, "amount": 8000.0}, {"name": "Field Direct Trees LLC", "qty": 7, "amount": 11900.0}, {"name": "Joel Clapick", "qty": 10, "amount": 10000.0}, {"name": "Landscape Workshop", "qty": 25, "amount": 44100.0}, {"name": "Mountain Gardens", "qty": 52, "amount": 28600.0}, {"name": "Western Sky Management, LLC", "qty": 10, "amount": 22000.0}]}, {"height": "26'", "grade": "A", "qty": 20, "revenue": 15300.0, "avg_price": 765.0, "buyers": [{"name": "Aspen SavATree", "qty": 17, "amount": 10200.0}, {"name": "Field Direct Trees LLC", "qty": 3, "amount": 5100.0}]}, {"height": "12'", "grade": "B", "qty": 3, "revenue": 1542.0, "avg_price": 514.0, "buyers": [{"name": "Beautiful Gardens Colorado", "qty": 1, "amount": 590.0}, {"name": "Field Direct Trees LLC", "qty": 2, "amount": 952.0}]}, {"height": "13'", "grade": "B", "qty": 6, "revenue": 3601.5, "avg_price": 600.25, "buyers": [{"name": "Beautiful Gardens Colorado", "qty": 3, "amount": 1995.0}, {"name": "Field Direct Trees LLC", "qty": 3, "amount": 1606.5}]}, {"height": "14'", "grade": "B", "qty": 5, "revenue": 2957.7, "avg_price": 591.54, "buyers": [{"name": "Field Direct Trees LLC", "qty": 5, "amount": 2957.7}]}, {"height": "15'", "grade": "B", "qty": 1, "revenue": 775.0, "avg_price": 775.0, "buyers": [{"name": "Field Direct Trees LLC", "qty": 1, "amount": 775.0}]}, {"height": "16'", "grade": "B", "qty": 3, "revenue": 2346.0, "avg_price": 782.0, "buyers": [{"name": "Field Direct Trees LLC", "qty": 3, "amount": 2346.0}]}, {"height": "18'", "grade": "B", "qty": 3, "revenue": 3162.0, "avg_price": 1054.0, "buyers": [{"name": "Field Direct Trees LLC", "qty": 3, "amount": 3162.0}]}, {"height": "Misc", "grade": "Misc", "qty": 3, "revenue": -4686.48, "avg_price": -1562.16, "buyers": [{"name": "Beautiful Garden", "qty": 0, "amount": -6000.0}, {"name": "Beautiful Gardens Colorado", "qty": 1, "amount": 728.52}, {"name": "Lipkin Warner Construction", "qty": 2, "amount": 585.0}]}], "2026": [{"height": "26'", "grade": "A", "qty": 1, "revenue": 600.0, "avg_price": 600.0, "buyers": [{"name": "Aspen SavATree", "qty": 1, "amount": 600.0}]}]};
+
+// Transaction XLSX loader (tries to load from same directory)
+async function loadTransactionXlsx() {
+    const currentPath = window.location.pathname;
+    const dirPath = currentPath.substring(0, currentPath.lastIndexOf('/') + 1);
+    const host = window.location.hostname;
+    
+    const txFiles = ['SPTF_LLC_Transaction_Report.xlsx'];
+    
+    // Try GitHub API first
+    if (host.endsWith('.github.io')) {
+        const owner = host.replace('.github.io', '');
+        const pathParts = window.location.pathname.split('/').filter(Boolean);
+        const repo = pathParts[0] || '';
+        const folder = pathParts.slice(1, -1).join('/');
+        try {
+            const apiUrl = 'https://api.github.com/repos/' + owner + '/' + repo + '/contents/' + folder;
+            const resp = await fetch(apiUrl);
+            if (resp.ok) {
+                const files = await resp.json();
+                const txFile = files.find(f => f.name.match(/Transaction.Report.*\.xlsx$/i));
+                if (txFile) {
+                    const r = await fetch(txFile.download_url);
+                    if (r.ok) {
+                        const buf = await r.arrayBuffer();
+                        parseTransactionXlsx(buf);
+                        return true;
+                    }
+                }
             }
-        };
+        } catch(e) { console.log('TX GitHub API failed, using embedded data'); }
+    }
+    
+    // Fallback: try direct fetch
+    for (const fname of txFiles) {
+        try {
+            const resp = await fetch(dirPath + fname);
+            if (resp.ok) {
+                const buf = await resp.arrayBuffer();
+                parseTransactionXlsx(buf);
+                return true;
+            }
+        } catch(e) {}
+    }
+    
+    console.log('Using embedded transaction data');
+    return false;
+}
+
+function parseTransactionXlsx(buffer) {
+    try {
+        const wb = XLSX.read(buffer, {type: 'array'});
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws, {header: 1, defval: ''});
         
-        const targetSales = {
+        // Find header row (has 'Transaction date')
+        let headerIdx = -1;
+        for (let i = 0; i < Math.min(10, rows.length); i++) {
+            if (rows[i].some(c => String(c).includes('Transaction date'))) {
+                headerIdx = i;
+                break;
+            }
+        }
+        if (headerIdx < 0) { console.warn('Could not find header row'); return; }
+        
+        // Find download date (last rows)
+        for (let i = rows.length - 1; i > rows.length - 5; i--) {
+            if (rows[i] && String(rows[i][0] || '').includes('Cash Basis')) {
+                TRANSACTION_DOWNLOAD_DATE = String(rows[i][0]).trim();
+                break;
+            }
+        }
+        
+        // Parse columns: B=date, E=name, F=memo, I=amount, K=qty
+        var newData = {};
+        for (let i = headerIdx + 1; i < rows.length; i++) {
+            var r = rows[i];
+            if (!r) continue;
+            var dateVal = String(r[1] || '').trim();
+            var name = String(r[4] || '').trim();
+            var memo = String(r[5] || '').trim();
+            var amount = parseFloat(r[8]) || 0;
+            var qty = Math.abs(parseInt(r[10])) || 0;
+            
+            if (!dateVal || !amount) continue;
+            if (String(r[0] || '').startsWith('Total')) continue;
+            
+            var ym = dateVal.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+            if (!ym) continue;
+            var year = ym[3];
+            
+            var parsed = parseMemoDescription(memo);
+            var pricePerTree = qty > 0 ? Math.round(amount / qty * 100) / 100 : 0;
+            
+            if (!newData[year]) newData[year] = [];
+            
+            // Find or create bucket
+            var bucket = newData[year].find(b => b.height === parsed.height && b.grade === parsed.grade);
+            if (!bucket) {
+                bucket = {height: parsed.height, grade: parsed.grade, qty: 0, revenue: 0, buyers: {}};
+                newData[year].push(bucket);
+            }
+            bucket.qty += qty;
+            bucket.revenue += amount;
+            if (name) {
+                if (!bucket.buyers[name]) bucket.buyers[name] = {qty: 0, amount: 0};
+                bucket.buyers[name].qty += qty;
+                bucket.buyers[name].amount += amount;
+            }
+        }
+        
+        // Convert buyers to arrays and compute avg_price
+        for (var year in newData) {
+            newData[year].forEach(b => {
+                b.avg_price = b.qty > 0 ? Math.round(b.revenue / b.qty * 100) / 100 : 0;
+                b.revenue = Math.round(b.revenue * 100) / 100;
+                var buyerArr = [];
+                for (var n in b.buyers) {
+                    buyerArr.push({name: n, qty: b.buyers[n].qty, amount: Math.round(b.buyers[n].amount * 100) / 100});
+                }
+                b.buyers = buyerArr.sort((a,b) => a.name.localeCompare(b.name));
+            });
+            // Sort by grade then height
+            newData[year].sort((a, b) => {
+                var go = {A:0, B:1, Misc:2};
+                var ga = go[a.grade] || 9, gb = go[b.grade] || 9;
+                if (ga !== gb) return ga - gb;
+                var na = parseInt(a.height) || 999, nb = parseInt(b.height) || 999;
+                return na - nb;
+            });
+        }
+        
+        HISTORICAL_TRANSACTION_DATA = newData;
+        console.log('Parsed transaction XLSX, years:', Object.keys(newData));
+    } catch(e) {
+        console.error('Failed to parse transaction XLSX:', e);
+    }
+}
+
+function parseMemoDescription(memo) {
+    if (!memo || memo.trim() === '') return {height: 'Misc', grade: 'Misc'};
+    
+    memo = memo.trim();
+    var miscKw = ['discount', 'adjustment', 'damaged', 'sales tax', 'tax to', 'tax pd', 'refund', 'research bol'];
+    if (miscKw.some(k => memo.toLowerCase().includes(k))) return {height: 'Misc', grade: 'Misc'};
+    
+    var m;
+    // B Grade
+    m = memo.match(/B\s*Grade\s+(\d+)\s*FT/i);
+    if (m) return {height: m[1] + "'", grade: 'B'};
+    
+    // Discount pricing
+    m = memo.match(/(\d+)\s*FT\s*@\s*\d+%/i);
+    if (m) return {height: m[1] + "'", grade: 'A'};
+    
+    // Range
+    m = memo.match(/(\d+)\s*(?:FT)?\s*-\s*(\d+)\s*FT/i);
+    if (m) return {height: m[1] + "-" + m[2] + "'", grade: 'A'};
+    
+    // Sub notation
+    m = memo.match(/(\d+)\s*FT\s*\(sub/i);
+    if (m) return {height: m[1] + "'", grade: 'A'};
+    
+    // Standard
+    m = memo.match(/(\d+)\s+FT$/i);
+    if (m) return {height: m[1] + "'", grade: 'A'};
+    
+    return {height: 'Misc', grade: 'Misc'};
+}
+
+// historicalSales removed - loaded from transaction XLSX
+const targetSales = {
             '12"': 0, '18"': 0, '24"': 0, '30"': 0, "3'": 0, "4'": 0, "5'": 0,
             "6'": 500, "7'": 300, "8'": 500, "9'": 250, "10'": 500,
             "11'": 250, "12'": 500, "13'": 250, "14'": 500, "15'": 250,
@@ -3637,8 +3747,8 @@ function spRenderProjections() {
     var histYears = [2023, 2024, 2025];
     var chartLabels = histYears.concat(years);
 
-    var histSalesTotals = histYears.map(function(y) { return Object.values(historicalSales[y] || {}).reduce(function(s,d) { return s + d.qty; }, 0); });
-    var histRevTotals = histYears.map(function(y) { return Object.values(historicalSales[y] || {}).reduce(function(s,d) { return s + d.revenue; }, 0) / 1000; });
+    var histSalesTotals = histYears.map(function(y) { return Object.values(HISTORICAL_TRANSACTION_DATA[y] || {}).reduce(function(s,d) { return s + d.qty; }, 0); });
+    var histRevTotals = histYears.map(function(y) { return Object.values(HISTORICAL_TRANSACTION_DATA[y] || {}).reduce(function(s,d) { return s + d.revenue; }, 0) / 1000; });
 
     if (currentProjectionView === 'inventory') {
         var invData = years.map(function(y) {
@@ -3725,10 +3835,10 @@ function spRenderProjections() {
         histYears.forEach(function(y) {
             if (currentProjectionView === 'inventory') { tbl += '<td style="color:var(--sage);">-</td>'; }
             else if (currentProjectionView === 'sales') {
-                var q = (historicalSales[y] && historicalSales[y][h]) ? historicalSales[y][h].qty : 0;
+                var q = (HISTORICAL_TRANSACTION_DATA[y] && HISTORICAL_TRANSACTION_DATA[y][h]) ? HISTORICAL_TRANSACTION_DATA[y][h].qty : 0;
                 tbl += '<td style="color:var(--sage);font-style:italic;">' + (q || '-') + '</td>';
             } else {
-                var r = (historicalSales[y] && historicalSales[y][h]) ? historicalSales[y][h].revenue : 0;
+                var r = (HISTORICAL_TRANSACTION_DATA[y] && HISTORICAL_TRANSACTION_DATA[y][h]) ? HISTORICAL_TRANSACTION_DATA[y][h].revenue : 0;
                 tbl += '<td style="color:var(--sage);font-style:italic;">' + (r > 0 ? '$' + (r/1000).toFixed(0) + 'K' : '-') + '</td>';
             }
         });
@@ -3759,10 +3869,10 @@ function spRenderProjections() {
     histYears.forEach(function(y) {
         if (currentProjectionView === 'inventory') { tbl += '<td>-</td>'; }
         else if (currentProjectionView === 'sales') {
-            var t = Object.values(historicalSales[y] || {}).reduce(function(s,d) { return s+d.qty; }, 0);
+            var t = Object.values(HISTORICAL_TRANSACTION_DATA[y] || {}).reduce(function(s,d) { return s+d.qty; }, 0);
             tbl += '<td style="color:var(--sage);">' + t.toLocaleString() + '</td>';
         } else {
-            var t = Object.values(historicalSales[y] || {}).reduce(function(s,d) { return s+d.revenue; }, 0);
+            var t = Object.values(HISTORICAL_TRANSACTION_DATA[y] || {}).reduce(function(s,d) { return s+d.revenue; }, 0);
             tbl += '<td style="color:var(--sage);">$' + (t/1000).toFixed(0) + 'K</td>';
         }
     });
@@ -3808,36 +3918,57 @@ function spRenderOverview(projections, salesData) {
 
 // Historical rendering
 function spRenderHistoricalData() {
+    var data = HISTORICAL_TRANSACTION_DATA;
+    var years = Object.keys(data).sort();
+    
+    // Show download date
+    var dateEl = document.getElementById('histDownloadDate');
+    if (dateEl) dateEl.textContent = TRANSACTION_DOWNLOAD_DATE;
+    
+    // Collect all heights (A grade only for charts, 6ft+ )
+    var allHeights = new Set();
+    years.forEach(function(y) {
+        data[y].forEach(function(item) {
+            if (item.grade === 'A' && item.height !== 'Misc') {
+                var num = parseInt(item.height);
+                if (num >= 6) allHeights.add(item.height);
+            }
+        });
+    });
+    var sortedHeights = Array.from(allHeights).sort(function(a,b) {
+        return (parseInt(a) || 999) - (parseInt(b) || 999);
+    });
+    
+    // Volume chart (A grade trees by height)
     var volumeCtx = document.getElementById('histVolumeChart');
     if (spCharts.historicalVolume) spCharts.historicalVolume.destroy();
-    var allHeights = new Set();
-    for (var year of Object.keys(historicalSales)) {
-        for (var height of Object.keys(historicalSales[year])) {
-            if (heightToInches(height) >= 72) allHeights.add(height);
-        }
-    }
-    var sortedHeights = Array.from(allHeights).sort(function(a,b) { return heightToInches(a) - heightToInches(b); });
-    var years = Object.keys(historicalSales).sort();
-    var colors = ['#2d5a3d', '#5a8a6a', '#d4891a'];
+    var colors = ['#2d5a3d', '#5a8a6a', '#d4891a', '#6b4c35'];
     var volumeDatasets = years.map(function(year, idx) {
         return {
             label: year,
-            data: sortedHeights.map(function(h) { return historicalSales[year][h] ? historicalSales[year][h].qty : 0; }),
+            data: sortedHeights.map(function(h) {
+                var item = data[year].find(d => d.height === h && d.grade === 'A');
+                return item ? item.qty : 0;
+            }),
             backgroundColor: colors[idx % colors.length]
         };
     });
     spCharts.historicalVolume = new Chart(volumeCtx, {
         type: 'bar',
         data: { labels: sortedHeights, datasets: volumeDatasets },
-        options: { responsive: true, plugins: { legend: { display: true } }, scales: { y: { beginAtZero: true, title: { display: true, text: 'Trees Sold' } } } }
+        options: { responsive: true, plugins: { legend: { display: true }, title: { display: true, text: 'A Grade Sales Volume by Height' } }, scales: { y: { beginAtZero: true, title: { display: true, text: 'Trees Sold' } } } }
     });
 
+    // Price chart (A grade avg price by height)
     var priceCtx = document.getElementById('histPriceChart');
     if (spCharts.historicalPrice) spCharts.historicalPrice.destroy();
     var priceDatasets = years.map(function(year, idx) {
         return {
             label: year,
-            data: sortedHeights.map(function(h) { return historicalSales[year][h] ? historicalSales[year][h].price : 0; }),
+            data: sortedHeights.map(function(h) {
+                var item = data[year].find(d => d.height === h && d.grade === 'A');
+                return item ? item.avg_price : 0;
+            }),
             borderColor: colors[idx % colors.length],
             backgroundColor: colors[idx % colors.length] + '20',
             fill: false, tension: 0.4
@@ -3846,36 +3977,70 @@ function spRenderHistoricalData() {
     spCharts.historicalPrice = new Chart(priceCtx, {
         type: 'line',
         data: { labels: sortedHeights, datasets: priceDatasets },
-        options: { responsive: true, plugins: { legend: { display: true } }, scales: { y: { beginAtZero: true, title: { display: true, text: 'Avg Price ($)' } } } }
+        options: { responsive: true, plugins: { legend: { display: true }, title: { display: true, text: 'A Grade Avg Price by Height' } }, scales: { y: { beginAtZero: true, title: { display: true, text: 'Avg Price ($)' } } } }
     });
 
+    // Revenue chart (total by year)
     var revenueCtx = document.getElementById('histRevenueChart');
     if (spCharts.historicalRevenue) spCharts.historicalRevenue.destroy();
-    var revByYear = years.map(function(y) { return Object.values(historicalSales[y]).reduce(function(s,d) { return s+d.revenue; }, 0) / 1000; });
+    var revByYear = years.map(function(y) {
+        return data[y].reduce(function(s, d) { return s + d.revenue; }, 0) / 1000;
+    });
     spCharts.historicalRevenue = new Chart(revenueCtx, {
         type: 'bar',
         data: { labels: years, datasets: [{ label: 'Revenue ($K)', data: revByYear, backgroundColor: '#2d5a3d' }] },
-        options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, title: { display: true, text: 'Revenue ($1000s)' } } } }
+        options: { responsive: true, plugins: { legend: { display: false }, title: { display: true, text: 'Total Revenue by Year' } }, scales: { y: { beginAtZero: true, title: { display: true, text: 'Revenue ($1000s)' } } } }
     });
 
-    // Historical table
-    var tbl = '<table><thead><tr><th>Height</th>';
+    // Summary table - all items (A, B, Misc)
+    var tbl = '<table><thead><tr><th>Height</th><th>Grade</th>';
     years.forEach(function(y) { tbl += '<th colspan="3" style="text-align:center;">' + y + '</th>'; });
-    tbl += '</tr><tr><th></th>';
+    tbl += '</tr><tr><th></th><th></th>';
     years.forEach(function() { tbl += '<th>Qty</th><th>Avg $</th><th>Revenue</th>'; });
     tbl += '</tr></thead><tbody>';
-    sortedHeights.forEach(function(h) {
-        tbl += '<tr><td><strong>' + h + '</strong></td>';
+    
+    // Build all unique height+grade combos across years
+    var allItems = [];
+    var seen = new Set();
+    years.forEach(function(y) {
+        data[y].forEach(function(item) {
+            var key = item.height + '|' + item.grade;
+            if (!seen.has(key)) {
+                seen.add(key);
+                allItems.push({height: item.height, grade: item.grade});
+            }
+        });
+    });
+    allItems.sort(function(a, b) {
+        var go = {A:0, B:1, Misc:2};
+        var ga = go[a.grade] || 9, gb = go[b.grade] || 9;
+        if (ga !== gb) return ga - gb;
+        return (parseInt(a.height) || 999) - (parseInt(b.height) || 999);
+    });
+    
+    allItems.forEach(function(item) {
+        var gradeLabel = item.grade === 'Misc' ? '' : item.grade;
+        tbl += '<tr><td><strong>' + item.height + '</strong></td><td>' + gradeLabel + '</td>';
         years.forEach(function(y) {
-            var d = historicalSales[y][h];
-            if (d) {
-                tbl += '<td>' + d.qty + '</td><td>$' + d.price.toFixed(0) + '</td><td>$' + (d.revenue/1000).toFixed(1) + 'K</td>';
+            var d = data[y].find(x => x.height === item.height && x.grade === item.grade);
+            if (d && d.qty > 0) {
+                tbl += '<td>' + d.qty + '</td><td>$' + d.avg_price.toFixed(0) + '</td><td>$' + (d.revenue/1000).toFixed(1) + 'K</td>';
             } else {
                 tbl += '<td>-</td><td>-</td><td>-</td>';
             }
         });
         tbl += '</tr>';
     });
+    
+    // Add totals row
+    tbl += '<tr style="font-weight:bold; border-top:2px solid var(--pine);"><td>Total</td><td></td>';
+    years.forEach(function(y) {
+        var totalQty = data[y].reduce(function(s, d) { return s + d.qty; }, 0);
+        var totalRev = data[y].reduce(function(s, d) { return s + d.revenue; }, 0);
+        tbl += '<td>' + totalQty + '</td><td></td><td>$' + (totalRev/1000).toFixed(1) + 'K</td>';
+    });
+    tbl += '</tr>';
+    
     tbl += '</tbody></table>';
     document.getElementById('histSummaryTable').innerHTML = tbl;
 }
