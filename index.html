@@ -72,8 +72,7 @@
             display: flex;
             gap: 0;
             margin-left: 0.5rem;
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
+            flex-wrap: wrap;
         }
 
         .tab-btn {
@@ -1501,6 +1500,17 @@
             -webkit-overflow-scrolling: touch;
         }
 
+        #salesPage table td.cell-deficit {
+            background: rgba(158, 58, 47, 0.18) !important;
+            color: #9e3a2f;
+            font-weight: 500;
+        }
+        #salesPage table td.cell-surplus {
+            background: rgba(212, 137, 26, 0.18) !important;
+            color: #b8860b;
+            font-weight: 500;
+        }
+
         #salesPage table {
             width: 100%;
             border-collapse: collapse;
@@ -1712,6 +1722,7 @@
         <button class="tab-btn" data-tab="digPage" onclick="switchMainTab('digPage')">Dig Planner</button>
         <button class="tab-btn" data-tab="salesPage" onclick="switchMainTab('salesPage')">Sales Planner</button>
         <button class="tab-btn" data-tab="histPage" onclick="switchMainTab('histPage')">Historical</button>
+        <div id="dataSourceIndicator" style="margin-left:auto; padding:0 1rem; font-family:'DM Mono',monospace; font-size:0.55rem; color:rgba(255,255,255,0.3); display:flex; align-items:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"></div>
     </div>
 </div>
 
@@ -2348,15 +2359,12 @@ var LOADED_FILENAME = '';
 const XLSX_SIZES = ['12"','18"','24"','30"',"3'","4'","5'","6'","7'","8'","9'","10'","11'","12'","13'","14'","15'","16'","17'","18'","19'","20'","21'","22'","23'","24'","25'"];
 const XLSX_GRADES = ['A','B','Cut'];
 
-function parseXlsxToData(workbook) {
-    // Use the first sheet
+function parseXlsxToData(workbook, filenameOverride) {
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(sheet, {defval: 0});
     if (!rows.length) return;
 
-    // Detect column names - they should be like "12\"_A", "12\"_B", "12\"_Cut" etc.
     const colNames = Object.keys(rows[0]);
-    // Find lot and row columns (case-insensitive)
     const lotCol = colNames.find(c => c.toLowerCase() === 'lot') || colNames[0];
     const rowCol = colNames.find(c => c.toLowerCase() === 'row') || colNames[1];
 
@@ -2364,7 +2372,6 @@ function parseXlsxToData(workbook) {
     const sizeGradeCols = {};
     for (const col of colNames) {
         if (col === lotCol || col === rowCol) continue;
-        // Parse columns like "12\"_A", "3'_B", "25'_Cut"
         const match = col.match(/^(.+?)_(A|B|Cut)$/i);
         if (match) {
             const size = match[1].replace(/[\s]+/g,'');
@@ -2374,13 +2381,11 @@ function parseXlsxToData(workbook) {
         }
     }
 
-    // Extract year from filename for the year key
-    // Default to "2025" 
+    // Extract year from filename
+    const fname = filenameOverride || LOADED_FILENAME || '';
     let yearKey = '2025';
-    if (LOADED_FILENAME) {
-        const ym = LOADED_FILENAME.match(/(\d{4})-(\d{4})/);
-        if (ym) yearKey = ym[2]; // Use the second year (e.g., 2026 from "2025-2026")
-    }
+    const ym = fname.match(/(\d{4})-(\d{4})/);
+    if (ym) yearKey = ym[2];
 
     const yearlyData = {};
     const byRowData = {};
@@ -2391,8 +2396,7 @@ function parseXlsxToData(workbook) {
         const rowNum = parseInt(row[rowCol]) || 0;
 
         if (!yearlyData[lot]) {
-            yearlyData[lot] = { by_size: {}, total: 0 };
-            // Initialize sizes
+            yearlyData[lot] = { by_size: {}, total: 0, grand_total: 0, total_A: 0, total_B: 0, total_Cut: 0 };
             for (const size of Object.keys(sizeGradeCols)) {
                 yearlyData[lot].by_size[size] = { A: 0, B: 0, Cut: 0, total: 0 };
             }
@@ -2411,10 +2415,13 @@ function parseXlsxToData(workbook) {
             yearlyData[lot].by_size[size].Cut += cut;
             yearlyData[lot].by_size[size].total += total;
             yearlyData[lot].total += total;
+            yearlyData[lot].grand_total += total;
+            yearlyData[lot].total_A += a;
+            yearlyData[lot].total_B += b;
+            yearlyData[lot].total_Cut += cut;
 
             rowSizes[size] = { A: a, B: b, Cut: cut, total: total };
 
-            // Accumulate into farm-wide inventory
             if (!inventory[size]) inventory[size] = 0;
             inventory[size] += total;
         }
@@ -2422,32 +2429,39 @@ function parseXlsxToData(workbook) {
         byRowData[lot].push({ row: rowNum, sizes: rowSizes });
     }
 
-    // Store as the current year's data
     YEARLY_DATA[yearKey] = yearlyData;
     BY_ROW_DATA[yearKey] = byRowData;
+    
+    // Also populate INVENTORY for the map (uses the most recent year)
+    INVENTORY = yearlyData;
+
+    // Set initialInventory for Sales Planner (farm-wide totals by height)
     initialInventory = inventory;
 
-    // Also set as "current" year for map/dig planner
-    window.CURRENT_INVENTORY_YEAR = yearKey;
+    if (!window.CURRENT_INVENTORY_YEAR || yearKey > window.CURRENT_INVENTORY_YEAR) {
+        window.CURRENT_INVENTORY_YEAR = yearKey;
+    }
+    
     DATA_LOADED = true;
-    console.log('Loaded XLSX data for year', yearKey, '- lots:', Object.keys(yearlyData).length, 'total trees:', Object.values(inventory).reduce((s,v)=>s+v,0));
+    console.log('Loaded CSV data for year', yearKey, '- lots:', Object.keys(yearlyData).length, 'total trees:', Object.values(inventory).reduce((s,v)=>s+v,0));
 }
 
 async function loadInventoryXlsx() {
-    // Try to find the most recent xlsx file
-    // Strategy: try GitHub API first, then fall back to known filenames
-    
     const currentPath = window.location.pathname;
     const dirPath = currentPath.substring(0, currentPath.lastIndexOf('/') + 1);
-    
-    // Try GitHub API to list files
-    // Extract owner/repo from github.io URL
     const host = window.location.hostname;
-    let filesFound = [];
     
+    // Files to load (most recent first)
+    const csvFiles = [
+        '2025-2026_Fall_Inventory_Summary_7_29_25_by_row.csv',
+        '2024-2025_Fall_Inventory_Summary_3_24_25_by_row.csv'
+    ];
+    
+    let loaded = [];
+    
+    // Try GitHub API first to discover files
     if (host.endsWith('.github.io')) {
         const owner = host.replace('.github.io', '');
-        // The repo name is the first path segment
         const pathParts = window.location.pathname.split('/').filter(Boolean);
         const repo = pathParts[0] || '';
         const folder = pathParts.slice(1, -1).join('/');
@@ -2457,73 +2471,81 @@ async function loadInventoryXlsx() {
             const resp = await fetch(apiUrl);
             if (resp.ok) {
                 const files = await resp.json();
-                filesFound = files
+                const inventoryFiles = files
                     .filter(f => f.name.match(/Fall.Inventory.Summary.*\.(xlsx|csv)$/i))
-                    .map(f => ({ name: f.name, url: f.download_url }))
-                    .sort((a, b) => {
-                        // Sort by the date in the filename (m.dd.yy format)
-                        const dateA = extractDate(a.name);
-                        const dateB = extractDate(b.name);
-                        return dateB - dateA; // Most recent first
-                    });
+                    .sort((a, b) => extractDate(b.name) - extractDate(a.name));
+                
+                for (const file of inventoryFiles) {
+                    try {
+                        const resp = await fetch(file.download_url);
+                        if (resp.ok) {
+                            if (file.name.endsWith('.csv')) {
+                                const text = await resp.text();
+                                const wb = XLSX.read(text, {type: 'string'});
+                                parseXlsxToData(wb, file.name);
+                            } else {
+                                const buf = await resp.arrayBuffer();
+                                const wb = XLSX.read(buf, {type: 'array'});
+                                parseXlsxToData(wb, file.name);
+                            }
+                            loaded.push(file.name);
+                        }
+                    } catch(e) { console.warn('Failed to load', file.name, e); }
+                }
+                
+                if (loaded.length > 0) {
+                    LOADED_FILENAME = loaded.join(', ');
+                    updateDataSourceIndicator(loaded);
+                    return true;
+                }
             }
         } catch(e) {
             console.log('GitHub API not available, trying direct fetch');
         }
     }
     
-    // If we found files via API, load the most recent
-    if (filesFound.length > 0) {
-        const newest = filesFound[0];
-        LOADED_FILENAME = newest.name;
-        console.log('Loading most recent inventory:', newest.name);
-        try {
-            const resp = await fetch(newest.url);
-            if (newest.name.endsWith('.csv')) {
-                const text = await resp.text();
-                const wb = XLSX.read(text, {type: 'string'});
-                parseXlsxToData(wb);
-            } else {
-                const buf = await resp.arrayBuffer();
-                const wb = XLSX.read(buf, {type: 'array'});
-                parseXlsxToData(wb);
-            }
-            return true;
-        } catch(e) {
-            console.error('Failed to load', newest.name, e);
-        }
-    }
-    
-    // Fallback: try relative URLs for known filenames
-    const fallbackFiles = [
-        '2025-2026_Fall_Inventory_Summary_7_29_25_by_row.csv',
-        '2024-2025_Fall_Inventory_Summary_3_24_25_by_row.csv'
-    ];
-    
-    for (const fname of fallbackFiles) {
+    // Fallback: try known filenames directly
+    for (const fname of csvFiles) {
         try {
             const resp = await fetch(dirPath + fname);
             if (resp.ok) {
-                LOADED_FILENAME = fname;
                 if (fname.endsWith('.csv')) {
                     const text = await resp.text();
                     const wb = XLSX.read(text, {type: 'string'});
-                    parseXlsxToData(wb);
+                    parseXlsxToData(wb, fname);
                 } else {
                     const buf = await resp.arrayBuffer();
                     const wb = XLSX.read(buf, {type: 'array'});
-                    parseXlsxToData(wb);
+                    parseXlsxToData(wb, fname);
                 }
-                console.log('Loaded fallback:', fname);
-                return true;
+                loaded.push(fname);
             }
         } catch(e) { /* try next */ }
     }
     
-    console.warn('No XLSX inventory file found - using hardcoded fallback');
+    if (loaded.length > 0) {
+        LOADED_FILENAME = loaded.join(', ');
+        updateDataSourceIndicator(loaded);
+        return true;
+    }
+    
+    console.warn('No inventory files found');
+    updateDataSourceIndicator([]);
     return false;
 }
 
+function updateDataSourceIndicator(filenames) {
+    // Update or create the data source indicator on each page
+    const indicator = document.getElementById('dataSourceIndicator');
+    if (indicator) {
+        if (filenames.length > 0) {
+            indicator.innerHTML = '<span style="opacity:0.5;">Data:</span> ' + filenames.map(f => '<span>' + f + '</span>').join(', ');
+            indicator.style.color = '#5a8a6a';
+        } else {
+            indicator.innerHTML = '<span style="color:#9e3a2f;">No inventory files loaded</span>';
+        }
+    }
+}
 function extractDate(filename) {
     // Extract date from "...Summary_M_DD_YY..." or "...Summary M.DD.YY..."
     var m = filename.match(/(\d{1,2})[_.](\d{1,2})[_.](\d{2,4})/);
@@ -2538,8 +2560,7 @@ function extractDate(filename) {
 // ══ MAP-ONLY DATA ══
 
 // ── Inventory data (embedded from CSV) ──────────────────────────────────────
-const INVENTORY = {"Lot 0": {"by_size": {"12\"": {"A": 189, "B": 13, "Cut": 0, "total": 202}, "18\"": {"A": 266, "B": 4, "Cut": 0, "total": 270}, "24\"": {"A": 583, "B": 1, "Cut": 0, "total": 584}, "30\"": {"A": 522, "B": 1, "Cut": 0, "total": 523}, "3'": {"A": 500, "B": 1, "Cut": 1, "total": 502}, "4'": {"A": 195, "B": 0, "Cut": 0, "total": 195}, "5'": {"A": 91, "B": 1, "Cut": 0, "total": 92}, "6'": {"A": 30, "B": 0, "Cut": 0, "total": 30}, "7'": {"A": 6, "B": 0, "Cut": 0, "total": 6}}, "total_A": 2382, "total_B": 21, "total_Cut": 1, "grand_total": 2404}, "Lot 1": {"by_size": {"18\"": {"A": 3, "B": 0, "Cut": 0, "total": 3}, "24\"": {"A": 3, "B": 0, "Cut": 0, "total": 3}, "30\"": {"A": 27, "B": 0, "Cut": 0, "total": 27}, "3'": {"A": 101, "B": 0, "Cut": 0, "total": 101}, "4'": {"A": 154, "B": 0, "Cut": 0, "total": 154}, "5'": {"A": 180, "B": 0, "Cut": 0, "total": 180}, "6'": {"A": 125, "B": 2, "Cut": 0, "total": 127}, "7'": {"A": 45, "B": 0, "Cut": 0, "total": 45}, "8'": {"A": 6, "B": 0, "Cut": 0, "total": 6}, "9'": {"A": 12, "B": 0, "Cut": 0, "total": 12}, "12'": {"A": 0, "B": 1, "Cut": 0, "total": 1}, "14'": {"A": 0, "B": 1, "Cut": 0, "total": 1}, "15'": {"A": 0, "B": 1, "Cut": 0, "total": 1}, "19'": {"A": 0, "B": 2, "Cut": 1, "total": 3}, "20'": {"A": 0, "B": 3, "Cut": 0, "total": 3}, "21'": {"A": 0, "B": 4, "Cut": 0, "total": 4}, "22'": {"A": 0, "B": 1, "Cut": 0, "total": 1}, "25'": {"A": 0, "B": 0, "Cut": 1, "total": 1}}, "total_A": 656, "total_B": 15, "total_Cut": 2, "grand_total": 673}, "Lot 10": {"by_size": {"3'": {"A": 1, "B": 1, "Cut": 0, "total": 2}, "4'": {"A": 2, "B": 0, "Cut": 0, "total": 2}, "5'": {"A": 2, "B": 0, "Cut": 0, "total": 2}, "6'": {"A": 14, "B": 3, "Cut": 1, "total": 18}, "7'": {"A": 16, "B": 5, "Cut": 0, "total": 21}, "8'": {"A": 21, "B": 0, "Cut": 0, "total": 21}, "9'": {"A": 12, "B": 1, "Cut": 0, "total": 13}, "10'": {"A": 12, "B": 1, "Cut": 0, "total": 13}, "11'": {"A": 3, "B": 0, "Cut": 0, "total": 3}, "12'": {"A": 3, "B": 1, "Cut": 0, "total": 4}, "13'": {"A": 2, "B": 0, "Cut": 0, "total": 2}, "14'": {"A": 1, "B": 0, "Cut": 0, "total": 1}, "15'": {"A": 0, "B": 2, "Cut": 0, "total": 2}, "16'": {"A": 1, "B": 2, "Cut": 0, "total": 3}, "17'": {"A": 1, "B": 6, "Cut": 0, "total": 7}, "21'": {"A": 0, "B": 1, "Cut": 0, "total": 1}, "23'": {"A": 0, "B": 3, "Cut": 0, "total": 3}, "24'": {"A": 3, "B": 4, "Cut": 0, "total": 7}, "25'": {"A": 0, "B": 5, "Cut": 0, "total": 5}}, "total_A": 94, "total_B": 35, "total_Cut": 1, "grand_total": 130}, "Lot 11": {"by_size": {"18\"": {"A": 2, "B": 0, "Cut": 0, "total": 2}, "24\"": {"A": 1, "B": 0, "Cut": 0, "total": 1}, "3'": {"A": 3, "B": 0, "Cut": 0, "total": 3}, "4'": {"A": 8, "B": 0, "Cut": 0, "total": 8}, "5'": {"A": 17, "B": 0, "Cut": 0, "total": 17}, "6'": {"A": 39, "B": 0, "Cut": 0, "total": 39}, "7'": {"A": 50, "B": 2, "Cut": 0, "total": 52}, "8'": {"A": 24, "B": 2, "Cut": 1, "total": 27}, "9'": {"A": 18, "B": 2, "Cut": 0, "total": 20}, "10'": {"A": 19, "B": 3, "Cut": 0, "total": 22}, "11'": {"A": 2, "B": 2, "Cut": 0, "total": 4}, "12'": {"A": 4, "B": 5, "Cut": 0, "total": 9}, "13'": {"A": 2, "B": 6, "Cut": 0, "total": 8}, "14'": {"A": 0, "B": 6, "Cut": 1, "total": 7}, "15'": {"A": 1, "B": 4, "Cut": 0, "total": 5}, "16'": {"A": 2, "B": 9, "Cut": 1, "total": 12}, "17'": {"A": 4, "B": 9, "Cut": 0, "total": 13}, "18'": {"A": 5, "B": 5, "Cut": 1, "total": 11}, "19'": {"A": 1, "B": 4, "Cut": 0, "total": 5}, "20'": {"A": 4, "B": 5, "Cut": 0, "total": 9}, "21'": {"A": 1, "B": 11, "Cut": 0, "total": 12}, "22'": {"A": 7, "B": 14, "Cut": 0, "total": 21}, "23'": {"A": 8, "B": 17, "Cut": 0, "total": 25}, "24'": {"A": 12, "B": 17, "Cut": 0, "total": 29}, "25'": {"A": 14, "B": 23, "Cut": 0, "total": 37}}, "total_A": 248, "total_B": 146, "total_Cut": 4, "grand_total": 398}, "Lot 12": {"by_size": {"12\"": {"A": 1, "B": 0, "Cut": 0, "total": 1}, "18\"": {"A": 38, "B": 0, "Cut": 0, "total": 38}, "24\"": {"A": 141, "B": 0, "Cut": 0, "total": 141}, "30\"": {"A": 273, "B": 1, "Cut": 0, "total": 274}, "3'": {"A": 467, "B": 0, "Cut": 6, "total": 473}, "4'": {"A": 223, "B": 0, "Cut": 2, "total": 225}, "5'": {"A": 151, "B": 0, "Cut": 0, "total": 151}, "6'": {"A": 122, "B": 0, "Cut": 0, "total": 122}, "7'": {"A": 36, "B": 2, "Cut": 0, "total": 38}, "8'": {"A": 19, "B": 3, "Cut": 0, "total": 22}, "9'": {"A": 26, "B": 1, "Cut": 0, "total": 27}, "10'": {"A": 51, "B": 3, "Cut": 0, "total": 54}, "11'": {"A": 53, "B": 4, "Cut": 1, "total": 58}, "12'": {"A": 48, "B": 4, "Cut": 2, "total": 54}, "13'": {"A": 29, "B": 0, "Cut": 0, "total": 29}, "14'": {"A": 19, "B": 2, "Cut": 0, "total": 21}, "15'": {"A": 2, "B": 2, "Cut": 0, "total": 4}, "17'": {"A": 0, "B": 1, "Cut": 0, "total": 1}, "18'": {"A": 1, "B": 1, "Cut": 0, "total": 2}, "19'": {"A": 1, "B": 0, "Cut": 0, "total": 1}, "20'": {"A": 1, "B": 1, "Cut": 0, "total": 2}, "21'": {"A": 3, "B": 4, "Cut": 0, "total": 7}, "22'": {"A": 0, "B": 4, "Cut": 0, "total": 4}, "23'": {"A": 1, "B": 1, "Cut": 0, "total": 2}, "24'": {"A": 2, "B": 1, "Cut": 0, "total": 3}, "25'": {"A": 2, "B": 5, "Cut": 0, "total": 7}}, "total_A": 1710, "total_B": 40, "total_Cut": 11, "grand_total": 1761}, "Lot 13": {"by_size": {"24\"": {"A": 5, "B": 0, "Cut": 0, "total": 5}, "3'": {"A": 5, "B": 1, "Cut": 0, "total": 6}, "4'": {"A": 2, "B": 0, "Cut": 0, "total": 2}, "5'": {"A": 16, "B": 0, "Cut": 0, "total": 16}, "6'": {"A": 20, "B": 1, "Cut": 0, "total": 21}, "7'": {"A": 24, "B": 3, "Cut": 0, "total": 27}, "8'": {"A": 25, "B": 2, "Cut": 0, "total": 27}, "9'": {"A": 23, "B": 0, "Cut": 0, "total": 23}, "10'": {"A": 17, "B": 0, "Cut": 0, "total": 17}, "11'": {"A": 13, "B": 0, "Cut": 0, "total": 13}, "12'": {"A": 7, "B": 0, "Cut": 0, "total": 7}, "14'": {"A": 4, "B": 0, "Cut": 0, "total": 4}, "16'": {"A": 2, "B": 0, "Cut": 0, "total": 2}, "17'": {"A": 1, "B": 0, "Cut": 0, "total": 1}, "19'": {"A": 0, "B": 3, "Cut": 0, "total": 3}, "21'": {"A": 2, "B": 1, "Cut": 1, "total": 4}, "22'": {"A": 1, "B": 5, "Cut": 0, "total": 6}, "23'": {"A": 3, "B": 5, "Cut": 0, "total": 8}, "24'": {"A": 4, "B": 7, "Cut": 1, "total": 12}, "25'": {"A": 13, "B": 19, "Cut": 0, "total": 32}}, "total_A": 187, "total_B": 47, "total_Cut": 2, "grand_total": 236}, "Lot 14": {"by_size": {"12\"": {"A": 268, "B": 17, "Cut": 0, "total": 285}, "18\"": {"A": 636, "B": 14, "Cut": 0, "total": 650}, "24\"": {"A": 959, "B": 11, "Cut": 0, "total": 970}, "30\"": {"A": 876, "B": 2, "Cut": 0, "total": 878}, "3'": {"A": 407, "B": 0, "Cut": 0, "total": 407}, "4'": {"A": 21, "B": 0, "Cut": 0, "total": 21}}, "total_A": 3167, "total_B": 44, "total_Cut": 0, "grand_total": 3211}, "Lot 15": {"by_size": {}, "total_A": 0, "total_B": 0, "total_Cut": 0, "grand_total": 0}, "Lot 16": {"by_size": {"12\"": {"A": 85, "B": 0, "Cut": 0, "total": 85}, "18\"": {"A": 479, "B": 0, "Cut": 0, "total": 479}, "24\"": {"A": 858, "B": 0, "Cut": 0, "total": 858}, "30\"": {"A": 1448, "B": 0, "Cut": 0, "total": 1448}, "3'": {"A": 1672, "B": 0, "Cut": 0, "total": 1672}, "4'": {"A": 560, "B": 0, "Cut": 0, "total": 560}, "5'": {"A": 89, "B": 0, "Cut": 0, "total": 89}, "6'": {"A": 2, "B": 0, "Cut": 0, "total": 2}}, "total_A": 5193, "total_B": 0, "total_Cut": 0, "grand_total": 5193}, "Lot 17": {"by_size": {"12\"": {"A": 50, "B": 0, "Cut": 0, "total": 50}, "18\"": {"A": 268, "B": 0, "Cut": 0, "total": 268}, "24\"": {"A": 540, "B": 0, "Cut": 0, "total": 540}, "30\"": {"A": 895, "B": 0, "Cut": 0, "total": 895}, "3'": {"A": 733, "B": 0, "Cut": 0, "total": 733}, "4'": {"A": 156, "B": 0, "Cut": 0, "total": 156}, "5'": {"A": 28, "B": 0, "Cut": 0, "total": 28}, "6'": {"A": 1, "B": 0, "Cut": 0, "total": 1}}, "total_A": 2671, "total_B": 0, "total_Cut": 0, "grand_total": 2671}, "Lot 2": {"by_size": {"12\"": {"A": 2, "B": 0, "Cut": 0, "total": 2}, "18\"": {"A": 9, "B": 0, "Cut": 0, "total": 9}, "24\"": {"A": 22, "B": 0, "Cut": 0, "total": 22}, "30\"": {"A": 67, "B": 0, "Cut": 0, "total": 67}, "3'": {"A": 282, "B": 1, "Cut": 2, "total": 285}, "4'": {"A": 428, "B": 2, "Cut": 0, "total": 430}, "5'": {"A": 428, "B": 2, "Cut": 0, "total": 430}, "6'": {"A": 108, "B": 2, "Cut": 0, "total": 110}, "7'": {"A": 22, "B": 1, "Cut": 0, "total": 23}, "8'": {"A": 14, "B": 0, "Cut": 0, "total": 14}, "9'": {"A": 2, "B": 0, "Cut": 0, "total": 2}, "10'": {"A": 0, "B": 1, "Cut": 0, "total": 1}, "11'": {"A": 0, "B": 4, "Cut": 0, "total": 4}, "12'": {"A": 1, "B": 0, "Cut": 0, "total": 1}, "13'": {"A": 1, "B": 1, "Cut": 0, "total": 2}, "14'": {"A": 1, "B": 0, "Cut": 0, "total": 1}, "15'": {"A": 1, "B": 0, "Cut": 0, "total": 1}, "17'": {"A": 0, "B": 1, "Cut": 0, "total": 1}, "19'": {"A": 1, "B": 2, "Cut": 0, "total": 3}, "20'": {"A": 0, "B": 4, "Cut": 0, "total": 4}, "21'": {"A": 0, "B": 2, "Cut": 0, "total": 2}, "22'": {"A": 1, "B": 4, "Cut": 1, "total": 6}, "23'": {"A": 0, "B": 1, "Cut": 0, "total": 1}, "24'": {"A": 0, "B": 1, "Cut": 0, "total": 1}}, "total_A": 1390, "total_B": 29, "total_Cut": 3, "grand_total": 1422}, "Lot 3": {"by_size": {"12\"": {"A": 2, "B": 0, "Cut": 0, "total": 2}, "18\"": {"A": 177, "B": 1, "Cut": 0, "total": 178}, "24\"": {"A": 3528, "B": 1, "Cut": 0, "total": 3529}, "30\"": {"A": 863, "B": 1, "Cut": 0, "total": 864}, "3'": {"A": 38, "B": 2, "Cut": 2, "total": 42}, "4'": {"A": 21, "B": 2, "Cut": 0, "total": 23}, "5'": {"A": 22, "B": 3, "Cut": 0, "total": 25}, "6'": {"A": 6, "B": 2, "Cut": 2, "total": 10}, "7'": {"A": 6, "B": 2, "Cut": 2, "total": 10}, "8'": {"A": 6, "B": 0, "Cut": 0, "total": 6}, "9'": {"A": 3, "B": 2, "Cut": 0, "total": 5}, "10'": {"A": 1, "B": 0, "Cut": 0, "total": 1}, "11'": {"A": 1, "B": 1, "Cut": 1, "total": 3}, "12'": {"A": 1, "B": 1, "Cut": 0, "total": 2}, "13'": {"A": 2, "B": 1, "Cut": 0, "total": 3}, "14'": {"A": 4, "B": 1, "Cut": 0, "total": 5}, "15'": {"A": 1, "B": 1, "Cut": 0, "total": 2}}, "total_A": 4682, "total_B": 21, "total_Cut": 7, "grand_total": 4710}, "Lot 4": {"by_size": {"12\"": {"A": 429, "B": 7, "Cut": 0, "total": 436}, "18\"": {"A": 1115, "B": 0, "Cut": 0, "total": 1115}, "24\"": {"A": 926, "B": 1, "Cut": 0, "total": 927}, "30\"": {"A": 50, "B": 0, "Cut": 0, "total": 50}, "7'": {"A": 1, "B": 0, "Cut": 0, "total": 1}}, "total_A": 2521, "total_B": 8, "total_Cut": 0, "grand_total": 2529}, "Lot 5": {"by_size": {"12\"": {"A": 30, "B": 0, "Cut": 0, "total": 30}, "18\"": {"A": 305, "B": 0, "Cut": 0, "total": 305}, "24\"": {"A": 5, "B": 0, "Cut": 0, "total": 5}, "3'": {"A": 11, "B": 3, "Cut": 0, "total": 14}, "4'": {"A": 64, "B": 17, "Cut": 6, "total": 87}, "5'": {"A": 124, "B": 19, "Cut": 3, "total": 146}, "6'": {"A": 156, "B": 49, "Cut": 1, "total": 206}, "7'": {"A": 137, "B": 48, "Cut": 0, "total": 185}, "8'": {"A": 67, "B": 33, "Cut": 0, "total": 100}, "9'": {"A": 24, "B": 13, "Cut": 0, "total": 37}, "10'": {"A": 1, "B": 2, "Cut": 0, "total": 3}, "11'": {"A": 1, "B": 0, "Cut": 1, "total": 2}, "12'": {"A": 2, "B": 1, "Cut": 0, "total": 3}, "13'": {"A": 1, "B": 0, "Cut": 0, "total": 1}, "19'": {"A": 2, "B": 3, "Cut": 0, "total": 5}, "20'": {"A": 1, "B": 0, "Cut": 0, "total": 1}, "21'": {"A": 0, "B": 2, "Cut": 0, "total": 2}, "22'": {"A": 0, "B": 1, "Cut": 1, "total": 2}, "23'": {"A": 1, "B": 0, "Cut": 1, "total": 2}, "25'": {"A": 0, "B": 1, "Cut": 0, "total": 1}}, "total_A": 932, "total_B": 192, "total_Cut": 13, "grand_total": 1137}, "Lot 6": {"by_size": {"18\"": {"A": 11, "B": 0, "Cut": 0, "total": 11}, "24\"": {"A": 43, "B": 0, "Cut": 0, "total": 43}, "30\"": {"A": 59, "B": 0, "Cut": 0, "total": 59}, "3'": {"A": 192, "B": 3, "Cut": 4, "total": 199}, "4'": {"A": 182, "B": 4, "Cut": 2, "total": 188}, "5'": {"A": 122, "B": 6, "Cut": 0, "total": 128}, "6'": {"A": 94, "B": 15, "Cut": 1, "total": 110}, "7'": {"A": 132, "B": 12, "Cut": 0, "total": 144}, "8'": {"A": 202, "B": 4, "Cut": 0, "total": 206}, "9'": {"A": 233, "B": 0, "Cut": 0, "total": 233}, "10'": {"A": 109, "B": 0, "Cut": 0, "total": 109}, "11'": {"A": 76, "B": 0, "Cut": 0, "total": 76}, "12'": {"A": 16, "B": 0, "Cut": 0, "total": 16}, "13'": {"A": 2, "B": 0, "Cut": 0, "total": 2}, "14'": {"A": 4, "B": 0, "Cut": 0, "total": 4}, "21'": {"A": 0, "B": 0, "Cut": 1, "total": 1}, "22'": {"A": 0, "B": 4, "Cut": 0, "total": 4}, "23'": {"A": 3, "B": 0, "Cut": 0, "total": 3}, "24'": {"A": 1, "B": 1, "Cut": 0, "total": 2}, "25'": {"A": 2, "B": 6, "Cut": 0, "total": 8}}, "total_A": 1483, "total_B": 55, "total_Cut": 8, "grand_total": 1546}, "Lot 7": {"by_size": {"12\"": {"A": 105, "B": 0, "Cut": 0, "total": 105}, "18\"": {"A": 734, "B": 1, "Cut": 0, "total": 735}, "24\"": {"A": 1101, "B": 0, "Cut": 0, "total": 1101}, "30\"": {"A": 882, "B": 0, "Cut": 0, "total": 882}, "3'": {"A": 593, "B": 2, "Cut": 0, "total": 595}, "4'": {"A": 209, "B": 6, "Cut": 0, "total": 215}, "5'": {"A": 70, "B": 4, "Cut": 1, "total": 75}, "6'": {"A": 68, "B": 4, "Cut": 0, "total": 72}, "7'": {"A": 20, "B": 5, "Cut": 0, "total": 25}, "8'": {"A": 6, "B": 1, "Cut": 0, "total": 7}, "9'": {"A": 7, "B": 2, "Cut": 0, "total": 9}, "10'": {"A": 4, "B": 0, "Cut": 0, "total": 4}, "11'": {"A": 3, "B": 1, "Cut": 0, "total": 4}, "12'": {"A": 2, "B": 0, "Cut": 0, "total": 2}, "13'": {"A": 2, "B": 0, "Cut": 0, "total": 2}, "15'": {"A": 0, "B": 1, "Cut": 0, "total": 1}, "16'": {"A": 2, "B": 1, "Cut": 0, "total": 3}, "17'": {"A": 0, "B": 1, "Cut": 0, "total": 1}, "18'": {"A": 0, "B": 1, "Cut": 0, "total": 1}, "20'": {"A": 1, "B": 1, "Cut": 0, "total": 2}, "21'": {"A": 0, "B": 1, "Cut": 0, "total": 1}, "24'": {"A": 4, "B": 2, "Cut": 0, "total": 6}, "25'": {"A": 5, "B": 2, "Cut": 0, "total": 7}}, "total_A": 3818, "total_B": 36, "total_Cut": 1, "grand_total": 3855}, "Lot 8": {"by_size": {"18\"": {"A": 6, "B": 0, "Cut": 0, "total": 6}, "24\"": {"A": 31, "B": 0, "Cut": 0, "total": 31}, "30\"": {"A": 87, "B": 0, "Cut": 0, "total": 87}, "3'": {"A": 113, "B": 1, "Cut": 0, "total": 114}, "4'": {"A": 54, "B": 1, "Cut": 0, "total": 55}, "5'": {"A": 18, "B": 1, "Cut": 0, "total": 19}, "8'": {"A": 1, "B": 0, "Cut": 0, "total": 1}, "9'": {"A": 1, "B": 0, "Cut": 0, "total": 1}, "10'": {"A": 4, "B": 0, "Cut": 0, "total": 4}, "11'": {"A": 3, "B": 0, "Cut": 0, "total": 3}, "12'": {"A": 0, "B": 2, "Cut": 0, "total": 2}, "14'": {"A": 0, "B": 1, "Cut": 0, "total": 1}, "17'": {"A": 0, "B": 1, "Cut": 0, "total": 1}, "18'": {"A": 0, "B": 5, "Cut": 0, "total": 5}, "19'": {"A": 0, "B": 2, "Cut": 0, "total": 2}, "20'": {"A": 0, "B": 2, "Cut": 0, "total": 2}, "22'": {"A": 0, "B": 6, "Cut": 6, "total": 12}, "23'": {"A": 2, "B": 7, "Cut": 0, "total": 9}, "24'": {"A": 2, "B": 12, "Cut": 2, "total": 16}, "25'": {"A": 1, "B": 15, "Cut": 0, "total": 16}}, "total_A": 323, "total_B": 56, "total_Cut": 8, "grand_total": 387}, "Lot 9": {"by_size": {"12\"": {"A": 45, "B": 0, "Cut": 0, "total": 45}, "18\"": {"A": 137, "B": 0, "Cut": 0, "total": 137}, "24\"": {"A": 163, "B": 0, "Cut": 0, "total": 163}, "30\"": {"A": 185, "B": 0, "Cut": 0, "total": 185}, "3'": {"A": 230, "B": 0, "Cut": 0, "total": 230}, "4'": {"A": 140, "B": 0, "Cut": 0, "total": 140}, "5'": {"A": 54, "B": 0, "Cut": 0, "total": 54}, "6'": {"A": 15, "B": 0, "Cut": 0, "total": 15}, "7'": {"A": 6, "B": 0, "Cut": 0, "total": 6}, "8'": {"A": 2, "B": 0, "Cut": 0, "total": 2}, "9'": {"A": 3, "B": 0, "Cut": 0, "total": 3}, "11'": {"A": 4, "B": 0, "Cut": 0, "total": 4}, "12'": {"A": 2, "B": 0, "Cut": 0, "total": 2}, "14'": {"A": 2, "B": 0, "Cut": 0, "total": 2}, "15'": {"A": 2, "B": 0, "Cut": 0, "total": 2}, "20'": {"A": 0, "B": 1, "Cut": 0, "total": 1}, "22'": {"A": 2, "B": 0, "Cut": 0, "total": 2}, "23'": {"A": 2, "B": 0, "Cut": 0, "total": 2}, "24'": {"A": 3, "B": 2, "Cut": 0, "total": 5}, "25'": {"A": 0, "B": 1, "Cut": 0, "total": 1}}, "total_A": 997, "total_B": 4, "total_Cut": 0, "grand_total": 1001}};
-
+var INVENTORY = {}; // Loaded from CSV
 // ── Multi-year inventory data ────────────────────────────────────────────────
 
 
@@ -2627,34 +2648,13 @@ function computeYearTotals(yearKey) {
     return { total, a, b, cut };
 }
 
-const t24 = computeYearTotals('2024');
-const t25 = computeYearTotals('2025');
+// Header totals computed after data loads in refreshMapData()
 
 function statCol(val, lbl) {
     return `<div class="header-stat"><div class="hs-val">${val.toLocaleString()}</div><div class="hs-lbl">${lbl}</div></div>`;
 }
 
-document.getElementById('headerTotals').innerHTML = `
-    <div class="header-year-group">
-        <div class="hs-year-lbl">2024</div>
-        <div class="header-year-stats">
-            ${statCol(t24.total, 'Total')}
-            ${statCol(t24.a,     'Grade A')}
-            ${statCol(t24.b,     'Grade B')}
-            ${statCol(t24.cut,   'Cut')}
-        </div>
-    </div>
-    <div class="header-year-divider"></div>
-    <div class="header-year-group">
-        <div class="hs-year-lbl">2025</div>
-        <div class="header-year-stats">
-            ${statCol(t25.total, 'Total')}
-            ${statCol(t25.a,     'Grade A')}
-            ${statCol(t25.b,     'Grade B')}
-            ${statCol(t25.cut,   'Cut')}
-        </div>
-    </div>
-`;
+// Header totals rendered after data loads
 
 // ── Parse coord string → Leaflet LatLngs ─────────────────────────────────────
 function parseCoords(coordStr) {
@@ -2960,21 +2960,33 @@ function switchYear(year) {
 // Wait for XLSX data to load, then initialize
 
 function refreshMapData() {
-    // Re-compute header totals after data load
-    if (typeof computeYearTotals === 'function') {
-        try {
-            var years = Object.keys(YEARLY_DATA).sort();
-            if (years.length > 0) {
-                var t1 = computeYearTotals(years[0]);
-                document.getElementById('headerTotals').innerHTML = years.map(function(yr) {
-                    var t = computeYearTotals(yr);
-                    return '<div class="header-year-group"><div class="hs-year-lbl">' + yr + '</div>' +
-                        '<div class="header-year-stats">' +
-                        statCol(t.total, 'Total') + statCol(t.a, 'Grade A') + statCol(t.b, 'Grade B') + statCol(t.cut, 'Cut') +
-                        '</div></div>';
-                }).join('<div class="header-year-divider"></div>');
+    var years = Object.keys(YEARLY_DATA).sort();
+    if (years.length === 0) return;
+    
+    var headerHtml = years.map(function(yr) {
+        var t = computeYearTotals(yr);
+        return '<div class="header-year-group"><div class="hs-year-lbl">' + yr + '</div>' +
+            '<div class="header-year-stats">' +
+            statCol(t.total, 'Total') + statCol(t.a, 'Grade A') + statCol(t.b, 'Grade B') + statCol(t.cut, 'Cut') +
+            '</div></div>';
+    }).join('<div class="header-year-divider"></div>');
+    
+    document.getElementById('headerTotals').innerHTML = headerHtml;
+    
+    // Update map polygons with loaded data
+    if (typeof map !== 'undefined' && typeof KML_FIELDS !== 'undefined') {
+        // Re-render lot colors based on new data
+        map.eachLayer(function(layer) {
+            if (layer._path && layer.options && layer.options.lotKey) {
+                var lotKey = layer.options.lotKey;
+                var yr = window.CURRENT_INVENTORY_YEAR || years[years.length - 1];
+                var lotData = (YEARLY_DATA[yr] || {})[lotKey];
+                if (lotData) {
+                    var c = densityColor(lotData.grand_total || lotData.total || 0);
+                    layer.setStyle({ fillColor: c, fillOpacity: 0.45 });
+                }
             }
-        } catch(e) { console.log('Header refresh skipped:', e); }
+        });
     }
 }
 
