@@ -1733,7 +1733,7 @@
     <!-- Header -->
     <div class="header">
         <div class="header-text">
-            <div class="subtitle">FALL INVENTORY · CLICK A LOT TO EXPLORE</div>
+            <div class="subtitle">FALL INVENTORY · 8.4.26 · CLICK A LOT TO EXPLORE</div>
         </div>
         <div class="header-totals" id="headerTotals">
             <!-- filled by JS -->
@@ -2536,7 +2536,7 @@ async function loadInventoryXlsx() {
     // Fallback: try known filenames directly
     for (const fname of csvFiles) {
         try {
-            const resp = await fetch(dirPath + encodeURIComponent(fname));
+            const resp = await fetch(dirPath + encodeURIComponent(fname) + '?v=20260903-8426', { cache: 'no-store' });
             if (resp.ok) {
                 if (fname.endsWith('.csv')) {
                     const text = await resp.text();
