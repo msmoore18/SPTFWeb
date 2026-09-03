@@ -2401,11 +2401,9 @@ function parseXlsxToData(workbook, filenameOverride) {
         return;
     }
 
-    // Extract year from filename
+    // Extract year from filename: 8.4.26 (Aug–Dec) → 2026; else season start (2024-2025 → 2024)
     const fname = filenameOverride || LOADED_FILENAME || '';
-    let yearKey = '2025';
-    const ym = fname.match(/(\d{4})-(\d{4})/);
-    if (ym) yearKey = ym[1]; // Use first year (e.g., 2024 from '2024-2025')
+    let yearKey = yearKeyFromFilename(fname);
 
     const yearlyData = {};
     const byRowData = {};
@@ -2456,13 +2454,11 @@ function parseXlsxToData(workbook, filenameOverride) {
     YEARLY_DATA[yearKey] = yearlyData;
     BY_ROW_DATA[yearKey] = byRowData;
     
-    // Set INVENTORY to the most recent year only
+    // Set INVENTORY / sales-planner totals to the most recent year only
     if (!window.CURRENT_INVENTORY_YEAR || yearKey >= window.CURRENT_INVENTORY_YEAR) {
         INVENTORY = yearlyData;
+        initialInventory = inventory;
     }
-
-    // Set initialInventory for Sales Planner (farm-wide totals by height)
-    initialInventory = inventory;
 
     if (!window.CURRENT_INVENTORY_YEAR || yearKey > window.CURRENT_INVENTORY_YEAR) {
         window.CURRENT_INVENTORY_YEAR = yearKey;
@@ -2483,6 +2479,7 @@ async function loadInventoryXlsx() {
     // Files to load (most recent first)
     const csvFiles = [
         '2025-2026_Fall_Inventory_Summary_8_4_26_by_row.csv',
+        '2025-2026_Fall_Inventory_Summary_7_29_25_by_row.csv',
         '2024-2025 Fall Inventory Summary 3.24.25_by_row.csv'
     ];
     
@@ -2536,7 +2533,7 @@ async function loadInventoryXlsx() {
     // Fallback: try known filenames directly
     for (const fname of csvFiles) {
         try {
-            const resp = await fetch(dirPath + encodeURIComponent(fname) + '?v=20260903-8426', { cache: 'no-store' });
+            const resp = await fetch(dirPath + encodeURIComponent(fname) + '?v=20260903-y2026', { cache: 'no-store' });
             if (resp.ok) {
                 if (fname.endsWith('.csv')) {
                     const text = await resp.text();
@@ -2584,6 +2581,17 @@ function extractDate(filename) {
         return new Date(year, parseInt(m[1]) - 1, parseInt(m[2]));
     }
     return new Date(0);
+}
+
+function yearKeyFromFilename(fname) {
+    var ym = String(fname || '').match(/(\d{4})-(\d{4})/);
+    var seasonStart = ym ? ym[1] : '2025';
+    var d = extractDate(fname);
+    // Fall counts dated August–December use that calendar year (8.4.26 → 2026)
+    if (d && d.getTime() > 0 && d.getMonth() >= 7) {
+        return String(d.getFullYear());
+    }
+    return seasonStart;
 }
 
 // ══ MAP-ONLY DATA ══
@@ -3022,6 +3030,7 @@ function switchYear(year) {
 function refreshMapData() {
     var years = Object.keys(YEARLY_DATA).sort();
     if (years.length === 0) return;
+    if (window.CURRENT_INVENTORY_YEAR) currentYear = window.CURRENT_INVENTORY_YEAR;
     
     // Update header totals
     var headerHtml = years.map(function(yr) {
