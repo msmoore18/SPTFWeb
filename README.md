@@ -13,7 +13,12 @@ Interactive tree farm inventory map for Spruce Point. Click any lot on the map t
 
 ## Data
 
-Inventory data covers 18 lots across the Spruce Point property, sourced from fall inventory counts in 2024 and 2025. All data is embedded directly in the page — no backend required.
+Inventory is loaded at runtime from Fall Inventory Summary CSVs in the repo root (not embedded in the page).
+
+- **2025 season (current):** `2025-2026_Fall_Inventory_Summary_8_4_26_by_row.csv` — Fall 2026 counts with C grades removed (31,857 A+B trees).
+- **2024 season:** `2024-2025 Fall Inventory Summary 3.24.25_by_row.csv`
+
+The live site is [sptf.starmesaproperties.com](https://sptf.starmesaproperties.com/). GitHub Pages serves the `main` branch root.
 
 ## Deployment
 
